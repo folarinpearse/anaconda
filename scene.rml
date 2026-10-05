@@ -46,8 +46,8 @@
             </TextValueRun>
         </Text>
 
-        <Text x="680" y="20" originX="0" originY="0.5" sizingValue="autoWidth" name="State HUD" id="0:24">
-            <TextStylePaint fontSize="20" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:34">
+        <Text x="936" y="20" originX="1" originY="0.5" sizingValue="autoWidth" name="State HUD" id="0:24">
+            <TextStylePaint fontSize="16" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:34">
                 <Fill name="Fill" id="0:141"><SolidColor colorValue="FFFFD54F" name="Color" id="0:142"/></Fill>
             </TextStylePaint>
             <TextValueRun styleId="0:34" text="" name="Value" id="0:143">
@@ -70,13 +70,28 @@
             <SolidColor colorValue="FF14171C" name="Color" id="0:147"/>
         </Fill>
 
+        <!-- Focus: only the CLI player focuses the first FocusData on its own; the
+             Editor and web/embed runtimes do not. Request it from the file:
+             on load (entry state below) and on every pointer down. targetId
+             names the node that owns the FocusData (the ScriptedLayout 0:12),
+             not the FocusData itself. -->
         <StateMachine name="State Machine 1" id="0:7">
             <StateMachineLayer name="Layer 1" id="0:8">
                 <AnyState x="200" y="-120" id="0:148"/>
                 <ExitState x="400" y="-120" id="0:149"/>
-                <EntryState id="0:150"/>
+                <EntryState id="0:150">
+                    <StateTransition stateToId="0:160" id="0:531"/>
+                </EntryState>
+                <AnimationState x="160" y="0" animationId="0:161" id="0:160">
+                    <FocusActionTarget targetId="0:12" id="0:532"/>
+                </AnimationState>
             </StateMachineLayer>
+            <StateMachineListenerSingle listenerTypeValue="down" targetId="0:10" name="Focus On Press" id="0:162">
+                <FocusActionTarget targetId="0:12" id="0:533"/>
+            </StateMachineListenerSingle>
         </StateMachine>
+
+        <LinearAnimation duration="1" name="Focus Hold" id="0:161"/>
     </Artboard>
 
     <FontAsset file="Inter.ttf" name="Inter" id="0:90"/>
@@ -89,7 +104,7 @@
     <DataConverterToString decimals="0" round="true" name="To Text" id="0:120"/>
 
     <DataEnumCustom name="GameState" id="0:110">
-        <DataEnumValue key="ready" value="READY - PRESS SPACE" id="0:111"/>
+        <DataEnumValue key="ready" value="CLICK OR PRESS SPACE TO START" id="0:111"/>
         <DataEnumValue key="playing" value="PLAYING" id="0:112"/>
         <DataEnumValue key="won" value="YOU WIN - SPACE" id="0:113"/>
         <DataEnumValue key="lost" value="GAME OVER - SPACE" id="0:114"/>

@@ -164,6 +164,15 @@ function keyboardEvent(self: Game, event: KeyboardEvent): boolean
     return false
 end
 
+-- A click or tap starts a game that is waiting, same as Space. Focus for the
+-- keys is requested by the state machine's pointer listener in scene.rml.
+function pointerDown(self: Game, event: PointerEvent)
+    if self.sim.state == 'ready' then
+        Sim.start(self.sim)
+        event:hit()
+    end
+end
+
 function advance(self: Game, seconds: number): boolean
     Sim.update(self.sim, seconds)
     syncPeople(self, seconds)
@@ -286,6 +295,7 @@ return function(context: Context): Layout<Game>
         init = init,
         resize = resize,
         keyboardEvent = keyboardEvent,
+        pointerDown = pointerDown,
         advance = advance,
         draw = draw,
     }
