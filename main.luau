@@ -248,7 +248,7 @@ function draw(self: Game, renderer: Renderer)
     local playing = sim.state == 'playing'
     local snakeAlpha = 1.0
     local guestAlpha = 1.0
-    if playing and not sim.stopped then
+    if playing then
         snakeAlpha = math.clamp(sim.snakeAcc / Sim.TICK, 0, 1)
         guestAlpha = math.clamp(sim.guestAcc / Sim.GUEST_TICK, 0, 1)
     end

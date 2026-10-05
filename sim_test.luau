@@ -622,57 +622,90 @@ return function(): Tests
                 expect(#sim.turns).is(0)
             end)
 
-            test.case('boxed in: stops and takes damage once', function(expect)
-                -- One-row pocket: wall ahead, walls above and below, body behind.
+            test.case('a key held into the wall cannot undo the bounce', function(expect)
+                -- A held arrow key arrives as a stream of presses. Here RIGHT is
+                -- pressed on every frame while the snake runs into the east wall.
+                local sim = arena(12, 9, { { x = 10, y = 4 }, { x = 9, y = 4 }, { x = 8, y = 4 } }, Sim.RIGHT)
+                for _ = 1, 40 do -- 0.67s: inside the invulnerability window
+                    Sim.queueTurn(sim, Sim.RIGHT)
+                    Sim.update(sim, 1 / 60)
+                end
+                expect(sim.hp).is(Config.MAX_HP - 1) -- one hit, not a stream of them
+                expect(sim.dir.x).is(0) -- bounced
+                -- Without the guard the snake keeps being steered back into the wall
+                -- and sits at y 4. With it, it has made its two moves south.
+                expect(sim.cur[1].y).greaterThanOrEqual(6)
+            end)
+
+            test.case('during the window, input into the blocked direction is ignored', function(expect)
+                local sim = arena(12, 9, { { x = 10, y = 4 }, { x = 9, y = 4 } }, Sim.RIGHT)
+                Sim.stepSnake(sim) -- east wall: bounces south
+                expect(sim.dir.y).is(1)
+                Sim.queueTurn(sim, Sim.RIGHT) -- into the wall just hit
+                expect(#sim.turns).is(0)
+                Sim.queueTurn(sim, Sim.LEFT) -- any other legal turn still works
+                expect(#sim.turns).is(1)
+
+                -- Once the window closes the same input is accepted again.
+                sim.turns = {}
+                sim.invulnLeft = 0
+                Sim.queueTurn(sim, Sim.RIGHT)
+                expect(#sim.turns).is(1)
+            end)
+
+            test.case('boxed in at a dead end: swaps ends and carries on', function(expect)
+                -- Wall ahead, walls above and below, body behind: nowhere to turn.
                 local sim = Sim.new({
-                    '#####',
-                    '#...#',
-                    '#####',
+                    '#########',
+                    '#.......#',
+                    '#########',
                 }, 3)
                 Sim.start(sim)
-                sim.cur = { { x = 3, y = 1 }, { x = 2, y = 1 }, { x = 1, y = 1 } }
+                sim.cur = { { x = 7, y = 1 }, { x = 6, y = 1 }, { x = 5, y = 1 } }
                 sim.prev = table.clone(sim.cur)
                 sim.dir = Sim.RIGHT
                 Sim.stepSnake(sim)
-                expect(sim.stopped).is(true)
+                -- The tail is the head now and the snake faces west.
+                expect(sim.cur[1].x).is(5)
+                expect(sim.cur[3].x).is(7)
+                expect(#sim.cur).is(3)
+                expect(sim.dir.x).is(-1)
+                expect(sim.dir.y).is(0)
+                -- The swap itself cost nothing: only the hit that caused it did.
                 expect(sim.hp).is(Config.MAX_HP - 1)
                 expect(sim.state).is('playing')
 
-                -- Time passes: it neither moves nor takes more damage.
-                frames(sim, 120)
+                -- And it moves off immediately.
+                Sim.stepSnake(sim)
+                Sim.stepSnake(sim)
                 expect(sim.cur[1].x).is(3)
                 expect(sim.hp).is(Config.MAX_HP - 1)
-                expect(sim.stopped).is(true)
             end)
 
-            test.case('boxed in: only a direction onto a free tile restarts it', function(expect)
+            test.case('swapping ends follows the way the tail was facing', function(expect)
+                -- Head at the bottom of a dead-end shaft heading down; the tail
+                -- segment points west along the top corridor.
                 local sim = Sim.new({
-                    '#####',
-                    '#...#',
-                    '#####',
+                    '######',
+                    '#....#',
+                    '####.#',
+                    '####.#',
+                    '######',
                 }, 3)
                 Sim.start(sim)
-                sim.cur = { { x = 3, y = 1 }, { x = 2, y = 1 }, { x = 1, y = 1 } }
+                sim.cur = { { x = 4, y = 3 }, { x = 4, y = 2 }, { x = 4, y = 1 }, { x = 3, y = 1 } }
                 sim.prev = table.clone(sim.cur)
-                sim.dir = Sim.RIGHT
+                sim.dir = Sim.DOWN
                 Sim.stepSnake(sim)
-                expect(sim.stopped).is(true)
-
-                -- Every direction is blocked: wall, wall, wall, own neck.
-                Sim.queueTurn(sim, Sim.UP)
-                Sim.queueTurn(sim, Sim.DOWN)
-                Sim.queueTurn(sim, Sim.LEFT)
-                Sim.queueTurn(sim, Sim.RIGHT)
-                expect(sim.stopped).is(true)
-                expect(#sim.turns).is(0)
-
-                -- Knock out the wall above the head: pressing UP now goes.
-                sim.walls[1][4] = false -- row 0, column 3
-                Sim.queueTurn(sim, Sim.UP)
-                expect(sim.stopped).is(false)
-                frames(sim, 1)
                 expect(sim.cur[1].x).is(3)
-                expect(sim.cur[1].y).is(0)
+                expect(sim.cur[1].y).is(1)
+                expect(sim.cur[4].x).is(4)
+                expect(sim.cur[4].y).is(3)
+                expect(sim.dir.x).is(-1) -- west, not "up" (the reverse of the old heading)
+                expect(sim.dir.y).is(0)
+                Sim.stepSnake(sim)
+                expect(sim.cur[1].x).is(2)
+                expect(sim.hp).is(Config.MAX_HP - 1)
             end)
         end)
 

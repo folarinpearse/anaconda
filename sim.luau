@@ -38,7 +38,7 @@ export type Sim = {
     turns: { Cell },
     snakeAcc: number, -- progress to the next step, in base-tick units
     guestAcc: number,
-    stopped: boolean, -- boxed in after a hit: waits for a legal turn
+    bumpDir: Cell?, -- direction of the last wall/self bump, damaging or not
 
     -- health
     hp: number,
@@ -441,7 +441,7 @@ function Sim.reset(sim: Sim, state: string)
     sim.turns = {}
     sim.snakeAcc = 0
     sim.guestAcc = 0
-    sim.stopped = false
+    sim.bumpDir = nil
     sim.hp = Config.MAX_HP
     sim.invulnLeft = 0
     sim.hitCell = nil
@@ -503,7 +503,7 @@ function Sim.new(level: { string }, seed: number): Sim
         turns = {},
         snakeAcc = 0,
         guestAcc = 0,
-        stopped = false,
+        bumpDir = nil,
         hp = Config.MAX_HP,
         invulnLeft = 0,
         hitCell = nil,
@@ -539,19 +539,13 @@ function Sim.peopleLeft(sim: Sim): number
 end
 
 function Sim.queueTurn(sim: Sim, dir: Cell)
-    if sim.stopped then
-        -- Boxed in: any direction onto a free tile gets the snake moving again,
-        -- on the very next update.
-        local head = sim.cur[1]
-        if not moveBlocked(sim, head.x + dir.x, head.y + dir.y) then
-            sim.dir = dir
-            sim.stopped = false
-            sim.turns = {}
-            sim.snakeAcc = TICK
-        end
+    if #sim.turns >= MAX_QUEUED_TURNS then
         return
     end
-    if #sim.turns >= MAX_QUEUED_TURNS then
+    -- Right after a bump, steering back into the blocked direction is ignored,
+    -- so a key held down into the wall cannot undo the bounce.
+    local bump = sim.bumpDir
+    if sim.invulnLeft > 0 and bump ~= nil and bump.x == dir.x and bump.y == dir.y then
         return
     end
     -- Judge the turn against the direction the snake will be heading by then.
@@ -567,13 +561,33 @@ function Sim.queueTurn(sim: Sim, dir: Cell)
     table.insert(sim.turns, dir)
 end
 
+-- Boxed in: the tail becomes the head and the snake carries on the way the tail
+-- segment was facing (from the segment before it, out to the tail).
+local function swapEnds(sim: Sim)
+    local n = #sim.cur
+    local tail = sim.cur[n]
+    local facing: Cell = { x = -sim.dir.x, y = -sim.dir.y }
+    if n >= 2 then
+        local before = sim.cur[n - 1]
+        facing = { x = tail.x - before.x, y = tail.y - before.y }
+    end
+    local reversed: { Cell } = {}
+    for i = n, 1, -1 do
+        table.insert(reversed, sim.cur[i])
+    end
+    sim.cur = reversed
+    sim.prev = table.clone(reversed)
+    sim.dir = facing
+end
+
 -- A wall or self collision. The snake stays where it is, queued turns and any
 -- lunge are dropped, and it bounces: turns 90 degrees toward free space, or
--- stops if there is none. Outside the invulnerability window the hit also costs
--- 1 HP and is recorded; at 0 HP the game is lost.
+-- swaps ends if there is none. Outside the invulnerability window the hit also
+-- costs 1 HP and is recorded; at 0 HP the game is lost. Swapping ends is free.
 local function hit(sim: Sim, x: number, y: number)
     sim.turns = {}
     sim.lungeLeft = 0
+    sim.bumpDir = { x = sim.dir.x, y = sim.dir.y }
     sim.prev = table.clone(sim.cur) -- nothing slides this tick
     if sim.invulnLeft <= 0 then
         sim.hp = math.max(0, sim.hp - 1)
@@ -589,8 +603,7 @@ local function hit(sim: Sim, x: number, y: number)
     if turn ~= nil then
         sim.dir = turn
     else
-        sim.stopped = true
-        sim.snakeAcc = 0
+        swapEnds(sim)
     end
 end
 
@@ -599,9 +612,6 @@ end
 -- so the snake grows by one, and the whole old body (tail included) still counts
 -- for self-collision.
 function Sim.stepSnake(sim: Sim)
-    if sim.stopped then
-        return
-    end
     if #sim.turns > 0 then
         sim.dir = table.remove(sim.turns, 1) :: Cell
     end
@@ -636,9 +646,9 @@ function Sim.stepSnake(sim: Sim)
 end
 
 -- Starts a lunge: the next LUNGE_STEPS moves run at LUNGE_MULTIPLIER x the tick
--- rate. Refused outside play, while boxed in, or during the cooldown.
+-- rate. Refused outside play or during the cooldown.
 function Sim.lunge(sim: Sim): boolean
-    if sim.state ~= 'playing' or sim.stopped or sim.cooldownLeft > 0 then
+    if sim.state ~= 'playing' or sim.cooldownLeft > 0 then
         return false
     end
     sim.lungeLeft = Config.LUNGE_STEPS
@@ -725,11 +735,6 @@ function Sim.update(sim: Sim, dt: number)
     end
     local remaining = dt
     while remaining > 0 and sim.state == 'playing' do
-        if sim.stopped then
-            pass(remaining)
-            remaining = 0
-            break
-        end
         local rate = if sim.lungeLeft > 0 then Config.LUNGE_MULTIPLIER else 1
         local need = math.max(0, TICK - sim.snakeAcc) / rate
         if remaining >= need then
