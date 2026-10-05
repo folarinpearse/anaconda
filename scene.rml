@@ -1,0 +1,112 @@
+<Rive version="1" kind="fragment">
+    <Artboard x="0" y="0" defaultStateMachineId="0:7" viewModelId="0:100" viewModelInstanceId="0:106" clip="true"
+              width="960" height="960" styleId="0:5" name="Anaconda" id="0:2">
+        <LayoutComponentStyle name="Artboard Style" id="0:5"/>
+
+        <!-- HUD: RML text bound to the Game view model. Declared before the
+             playfield so it draws on top (first sibling is topmost). Each
+             readout sits in the top wall band (y 0-40). -->
+        <Text x="48" y="20" originX="0" originY="0.5" sizingValue="autoWidth" name="Score HUD" id="0:20">
+            <TextStylePaint fontSize="20" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:30">
+                <Fill name="Fill" id="0:121"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:122"/></Fill>
+            </TextStylePaint>
+            <TextValueRun styleId="0:30" text="SCORE " name="Label" id="0:123"/>
+            <TextValueRun styleId="0:30" text="0" name="Value" id="0:124">
+                <DataBindContext sourcePathIds="0:100-0:101" propertyKey="268" converterId="0:120" id="0:125"/>
+            </TextValueRun>
+        </Text>
+
+        <Text x="196" y="20" originX="0" originY="0.5" sizingValue="autoWidth" name="Length HUD" id="0:21">
+            <TextStylePaint fontSize="20" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:31">
+                <Fill name="Fill" id="0:126"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:127"/></Fill>
+            </TextStylePaint>
+            <TextValueRun styleId="0:31" text="LENGTH " name="Label" id="0:128"/>
+            <TextValueRun styleId="0:31" text="0" name="Value" id="0:129">
+                <DataBindContext sourcePathIds="0:100-0:102" propertyKey="268" converterId="0:120" id="0:130"/>
+            </TextValueRun>
+        </Text>
+
+        <Text x="346" y="20" originX="0" originY="0.5" sizingValue="autoWidth" name="People HUD" id="0:22">
+            <TextStylePaint fontSize="20" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:32">
+                <Fill name="Fill" id="0:131"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:132"/></Fill>
+            </TextStylePaint>
+            <TextValueRun styleId="0:32" text="PEOPLE " name="Label" id="0:133"/>
+            <TextValueRun styleId="0:32" text="0" name="Value" id="0:134">
+                <DataBindContext sourcePathIds="0:100-0:103" propertyKey="268" converterId="0:120" id="0:135"/>
+            </TextValueRun>
+        </Text>
+
+        <Text x="496" y="20" originX="0" originY="0.5" sizingValue="autoWidth" name="Escaped HUD" id="0:23">
+            <TextStylePaint fontSize="20" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:33">
+                <Fill name="Fill" id="0:136"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:137"/></Fill>
+            </TextStylePaint>
+            <TextValueRun styleId="0:33" text="ESCAPED " name="Label" id="0:138"/>
+            <TextValueRun styleId="0:33" text="0" name="Value" id="0:139">
+                <DataBindContext sourcePathIds="0:100-0:104" propertyKey="268" converterId="0:120" id="0:140"/>
+            </TextValueRun>
+        </Text>
+
+        <Text x="680" y="20" originX="0" originY="0.5" sizingValue="autoWidth" name="State HUD" id="0:24">
+            <TextStylePaint fontSize="20" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:34">
+                <Fill name="Fill" id="0:141"><SolidColor colorValue="FFFFD54F" name="Color" id="0:142"/></Fill>
+            </TextStylePaint>
+            <TextValueRun styleId="0:34" text="" name="Value" id="0:143">
+                <DataBindContext sourcePathIds="0:100-0:105" propertyKey="268" converterId="0:120" id="0:144"/>
+            </TextValueRun>
+        </Text>
+
+        <!-- Playfield: a fill-sized layout parent gives the script the artboard
+             size; FocusData is a direct child of the ScriptedLayout so it gets keys. -->
+        <LayoutComponent width="960" height="960" styleId="0:11" name="Playfield Root" id="0:10">
+            <LayoutComponentStyle layoutWidthScaleType="fill" layoutHeightScaleType="fill"
+                                  name="Playfield Root Style" id="0:11"/>
+            <ScriptedLayout scriptAssetId="0:80" name="Anaconda Game" id="0:12">
+                <FocusData id="0:145"/>
+                <ScriptInputArtboard artboardId="0:200" name="person" id="0:529"/>
+            </ScriptedLayout>
+        </LayoutComponent>
+
+        <Fill name="Background" id="0:146">
+            <SolidColor colorValue="FF14171C" name="Color" id="0:147"/>
+        </Fill>
+
+        <StateMachine name="State Machine 1" id="0:7">
+            <StateMachineLayer name="Layer 1" id="0:8">
+                <AnyState x="200" y="-120" id="0:148"/>
+                <ExitState x="400" y="-120" id="0:149"/>
+                <EntryState id="0:150"/>
+            </StateMachineLayer>
+        </StateMachine>
+    </Artboard>
+
+    <FontAsset file="Inter.ttf" name="Inter" id="0:90"/>
+    <!-- Modules register in document order: sim before whatever requires it. -->
+    <ScriptAsset file="level.luau" isModule="true" name="level" id="0:83"/>
+    <ScriptAsset file="sim.luau" isModule="true" name="sim" id="0:81"/>
+    <ScriptAsset file="sim_test.luau" name="sim_test" id="0:82"/>
+    <ScriptAsset file="main.luau" name="main" id="0:80"/>
+
+    <DataConverterToString decimals="0" round="true" name="To Text" id="0:120"/>
+
+    <DataEnumCustom name="GameState" id="0:110">
+        <DataEnumValue key="ready" value="READY - PRESS SPACE" id="0:111"/>
+        <DataEnumValue key="playing" value="PLAYING" id="0:112"/>
+        <DataEnumValue key="won" value="YOU WIN - SPACE" id="0:113"/>
+        <DataEnumValue key="lost" value="GAME OVER - SPACE" id="0:114"/>
+    </DataEnumCustom>
+
+    <ViewModel defaultInstanceId="0:106" name="Game" id="0:100">
+        <ViewModelPropertyNumber name="score" id="0:101"/>
+        <ViewModelPropertyNumber name="length" id="0:102"/>
+        <ViewModelPropertyNumber name="peopleLeft" id="0:103"/>
+        <ViewModelPropertyNumber name="escaped" id="0:104"/>
+        <ViewModelPropertyEnumCustom enumId="0:110" name="gameState" id="0:105"/>
+        <ViewModelInstance exports="true" name="Default" id="0:106">
+            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:101" id="0:151"/>
+            <ViewModelInstanceNumber propertyValue="5" viewModelPropertyId="0:102" id="0:152"/>
+            <ViewModelInstanceNumber propertyValue="6" viewModelPropertyId="0:103" id="0:153"/>
+            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:104" id="0:154"/>
+            <ViewModelInstanceEnum propertyValue="0:111" viewModelPropertyId="0:105" id="0:155"/>
+        </ViewModelInstance>
+    </ViewModel>
+</Rive>

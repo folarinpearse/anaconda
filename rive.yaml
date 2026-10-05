@@ -1,0 +1,11 @@
+name: anaconda
+main: Anaconda
+excludeFromRev:
+  scripts:
+    - "*_test"
+logs:
+  file: build/rive.log
+  problems: build/problems.log
+push:
+  projectId: 269268
+  fileId: 2631369
