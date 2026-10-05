@@ -4,6 +4,7 @@
 -- model that the RML HUD is bound to.
 
 local Sim = require('sim')
+local Config = require('config')
 local LEVEL = require('level')
 
 type Cell = Sim.Cell
@@ -25,6 +26,7 @@ type Game = {
     exitPaint: Paint,
     bodyPaint: Paint,
     headPaint: Paint,
+    flashPaint: Paint,
     size: Vector,
 
     -- view model handles, cached on the second init call
@@ -32,6 +34,10 @@ type Game = {
     length: Property<number>?,
     peopleLeft: Property<number>?,
     escaped: Property<number>?,
+    health: Property<number>?,
+    vision: Property<number>?,
+    boostReady: Property<boolean>?,
+    boostCooldown: Property<number>?,
     gameState: PropertyEnum?,
 }
 
@@ -49,6 +55,8 @@ local KEY_DIRS: { [number]: Cell } = {
     [265] = Sim.UP, [87] = Sim.UP, -- up arrow, W
 }
 local KEY_SPACE = 32
+local KEY_SHIFTS: { [number]: boolean } = { [340] = true, [344] = true } -- left, right
+local SHAKE_AMPLITUDE = 5 -- px at the moment of impact
 
 local function addRect(path: Path, x: number, y: number)
     -- Same winding for every rect so they can share one path.
@@ -88,6 +96,24 @@ local function publish(self: Game)
     local escaped = self.escaped
     if escaped ~= nil and escaped.value ~= sim.escaped then
         escaped.value = sim.escaped
+    end
+    local health = self.health
+    if health ~= nil and health.value ~= sim.hp then
+        health.value = sim.hp
+    end
+    local vision = self.vision
+    if vision ~= nil and vision.value ~= sim.vision then
+        vision.value = sim.vision
+    end
+    local boostReady = self.boostReady
+    local ready = Sim.boostReady(sim)
+    if boostReady ~= nil and boostReady.value ~= ready then
+        boostReady.value = ready
+    end
+    local boostCooldown = self.boostCooldown
+    local cooldown = Sim.boostCooldown(sim)
+    if boostCooldown ~= nil and boostCooldown.value ~= cooldown then
+        boostCooldown.value = cooldown
     end
     local gameState = self.gameState
     if gameState ~= nil and gameState.value ~= sim.state then
@@ -132,6 +158,10 @@ function init(self: Game, context: Context): boolean
     self.length = vm:getNumber('length')
     self.peopleLeft = vm:getNumber('peopleLeft')
     self.escaped = vm:getNumber('escaped')
+    self.health = vm:getNumber('health')
+    self.vision = vm:getNumber('vision')
+    self.boostReady = vm:getBoolean('boostReady')
+    self.boostCooldown = vm:getNumber('boostCooldown')
     self.gameState = vm:getEnum('gameState')
     publish(self)
     return true
@@ -154,7 +184,11 @@ function keyboardEvent(self: Game, event: KeyboardEvent): boolean
             restart(self)
             return true
         end
-        return false
+        Sim.lunge(sim) -- during play, Space is the boost
+        return true
+    end
+    if KEY_SHIFTS[event.key] then
+        return Sim.lunge(sim)
     end
     local dir = KEY_DIRS[event.key]
     if dir ~= nil and sim.state == 'playing' then
@@ -164,11 +198,16 @@ function keyboardEvent(self: Game, event: KeyboardEvent): boolean
     return false
 end
 
--- A click or tap starts a game that is waiting, same as Space. Focus for the
--- keys is requested by the state machine's pointer listener in scene.rml.
+-- A click or tap starts a game that is waiting, same as Space, and lunges
+-- during play. Focus for the keys is requested by the state machine's pointer
+-- listener in scene.rml.
 function pointerDown(self: Game, event: PointerEvent)
-    if self.sim.state == 'ready' then
-        Sim.start(self.sim)
+    local sim = self.sim
+    if sim.state == 'ready' then
+        Sim.start(sim)
+        event:hit()
+    elseif sim.state == 'playing' then
+        Sim.lunge(sim)
         event:hit()
     end
 end
@@ -209,7 +248,7 @@ function draw(self: Game, renderer: Renderer)
     local playing = sim.state == 'playing'
     local snakeAlpha = 1.0
     local guestAlpha = 1.0
-    if playing then
+    if playing and not sim.stopped then
         snakeAlpha = math.clamp(sim.snakeAcc / Sim.TICK, 0, 1)
         guestAlpha = math.clamp(sim.guestAcc / Sim.GUEST_TICK, 0, 1)
     end
@@ -226,19 +265,29 @@ function draw(self: Game, renderer: Renderer)
     end
 
     -- Fresh paths every frame: a drawn Path must never be mutated.
+    -- After a hit the head blinks and shakes, fading out over HIT_FX_TIME.
+    local sinceHit = sim.time - sim.hitTime
+    local fx = 0.0
+    if sim.hitTime >= 0 and sinceHit < Config.HIT_FX_TIME then
+        fx = 1 - sinceHit / Config.HIT_FX_TIME
+    end
+
     local body = Path.new()
     local head = Path.new()
     for i = 1, #sim.cur do
         local p = lerpCell(sim.prev[i], sim.cur[i], snakeAlpha)
         if i == 1 then
             body:moveTo(p)
-            addCircle(head, p.x, p.y, HEAD_RADIUS)
+            local hx = p.x + math.sin(sinceHit * 90) * SHAKE_AMPLITUDE * fx
+            local hy = p.y + math.cos(sinceHit * 110) * SHAKE_AMPLITUDE * fx
+            addCircle(head, hx, hy, HEAD_RADIUS)
         else
             body:lineTo(p)
         end
     end
     renderer:drawPath(body, self.bodyPaint)
-    renderer:drawPath(head, self.headPaint)
+    local blink = fx > 0 and math.floor(sinceHit * 24) % 2 == 0
+    renderer:drawPath(head, if blink then self.flashPaint else self.headPaint)
 
     renderer:restore()
 end
@@ -284,12 +333,17 @@ return function(context: Context): Layout<Game>
             color = Color.rgb(67, 160, 71),
         }),
         headPaint = Paint.with({ style = 'fill', color = Color.rgb(102, 204, 106) }),
+        flashPaint = Paint.with({ style = 'fill', color = Color.rgb(255, 235, 230) }),
         size = Vector.xy(0, 0),
 
         score = nil,
         length = nil,
         peopleLeft = nil,
         escaped = nil,
+        health = nil,
+        vision = nil,
+        boostReady = nil,
+        boostCooldown = nil,
         gameState = nil,
 
         init = init,

@@ -1,5 +1,6 @@
 -- Headless tests for the Anaconda rules. Run with `rive . --test`.
 local Sim = require('sim')
+local Config = require('config')
 local Level = require('level')
 
 type Mark = { x: number, y: number, ch: string }
@@ -41,6 +42,25 @@ local function run(sim: Sim.Sim, seconds: number, done: (() -> boolean)?, perFra
     end
 end
 
+-- Steps the simulation a whole number of 60 fps frames (no float rounding of a
+-- seconds count).
+local function frames(sim: Sim.Sim, n: number)
+    for _ = 1, n do
+        Sim.update(sim, 1 / 60)
+    end
+end
+
+-- A playing sim in an empty walled room with the snake placed head-first on
+-- `cells` and facing `dir`. Interior is x 1..w-2, y 1..h-2.
+local function arena(w: number, h: number, cells: { Sim.Cell }, dir: Sim.Cell): Sim.Sim
+    local sim = Sim.new(room(w, h, { { x = 1, y = 1, ch = 'S' } }), 1)
+    Sim.start(sim)
+    sim.cur = cells
+    sim.prev = table.clone(cells)
+    sim.dir = dir
+    return sim
+end
+
 local function snakeHas(sim: Sim.Sim, x: number, y: number): boolean
     for _, c in sim.cur do
         if c.x == x and c.y == y then
@@ -70,7 +90,7 @@ return function(): Tests
 
             test.case('snake chases a guest down a corridor and eats it', function(expect)
                 -- Right along the top corridor, then down column 11 after the guest.
-                local sim = play({ [48] = Sim.DOWN }, 150)
+                local sim = play({ [90] = Sim.DOWN }, 160)
                 expect(sim.eaten).is(1)
                 expect(sim.score).is(100)
                 expect(#sim.cur).is(6)
@@ -81,7 +101,7 @@ return function(): Tests
 
             test.case('a guest outruns the snake to the exit and escapes', function(expect)
                 -- Same start, but the snake turns away along row 12 and then up.
-                local sim = play({ [48] = Sim.DOWN, [84] = Sim.LEFT, [162] = Sim.UP }, 196)
+                local sim = play({ [77] = Sim.DOWN, [134] = Sim.LEFT, [259] = Sim.UP }, 314)
                 expect(sim.escaped).greaterThanOrEqual(1)
                 expect(sim.state).is('playing') -- fewer than 3 escaped, snake still alive
                 -- Every guest is either still around, eaten, or escaped.
@@ -339,7 +359,7 @@ return function(): Tests
                 expect(#sim.cur).is(4)
             end)
 
-            test.case('on an eating tick the tail does not advance, so the tail cell is a collision', function(expect)
+            test.case('on an eating tick the tail does not advance, so the tail cell is a hit', function(expect)
                 local sim = Sim.new({
                     '#####',
                     '#..P#',
@@ -354,23 +374,11 @@ return function(): Tests
                 sim.guests[1].cell = { x = 2, y = 2 }
                 sim.guests[1].prev = sim.guests[1].cell
                 Sim.stepSnake(sim)
-                expect(sim.state).is('lost')
+                expect(sim.state).is('playing')
+                expect(sim.hp).is(Config.MAX_HP - 1)
                 expect(sim.eaten).is(0)
-            end)
-
-            test.case('walls lose', function(expect)
-                local sim = Sim.new({
-                    '########',
-                    '#.S....#',
-                    '########',
-                }, 10)
-                -- Not enough room for the 5-segment snake: shorten it for the test.
-                Sim.start(sim)
-                sim.cur = { { x = 6, y = 1 }, { x = 5, y = 1 } }
-                sim.prev = table.clone(sim.cur)
-                sim.dir = Sim.RIGHT
-                Sim.stepSnake(sim)
-                expect(sim.state).is('lost')
+                expect(sim.cur[1].x).is(2) -- stayed put
+                expect(sim.cur[1].y).is(1)
             end)
 
             test.case('queued turns cannot reverse the snake', function(expect)
@@ -382,6 +390,357 @@ return function(): Tests
                 Sim.queueTurn(sim, Sim.LEFT) -- legal relative to the queued UP
                 Sim.queueTurn(sim, Sim.DOWN) -- buffer is full
                 expect(#sim.turns).is(2)
+            end)
+        end)
+
+        -- Unless a test says otherwise, arena(12, 9, ...) is the room these use:
+        -- interior x 1..10, y 1..7, walls at x 0 and 11 and at y 0 and 8.
+        test.group('pace', function()
+            test.case('base tick rate is 5 moves per second', function(expect)
+                expect(Config.TICK_RATE).is(5)
+                expect(Sim.TICK).is(1 / 5)
+            end)
+
+            test.case('the snake makes five moves in one second', function(expect)
+                local sim = arena(40, 5, { { x = 2, y = 2 }, { x = 1, y = 2 } }, Sim.RIGHT)
+                frames(sim, 62) -- the sixth move is due at 72 frames
+                expect(sim.cur[1].x).is(7)
+            end)
+        end)
+
+        test.group('health', function()
+            test.case('hitting a wall no longer ends the game', function(expect)
+                local sim = arena(12, 9, { { x = 10, y = 4 }, { x = 9, y = 4 } }, Sim.RIGHT)
+                Sim.stepSnake(sim)
+                expect(sim.state).is('playing')
+                expect(sim.hp).is(Config.MAX_HP - 1)
+                -- Did not enter the wall.
+                expect(sim.cur[1].x).is(10)
+                expect(sim.cur[1].y).is(4)
+                -- Impact recorded: the wall tile, and when.
+                expect(sim.hitCell).never.is(nil)
+                expect((sim.hitCell :: Sim.Cell).x).is(11)
+                expect((sim.hitCell :: Sim.Cell).y).is(4)
+                expect(sim.hitTime).is(sim.time)
+            end)
+
+            test.case('the impact time follows the clock', function(expect)
+                local sim = arena(40, 5, { { x = 2, y = 2 }, { x = 1, y = 2 } }, Sim.RIGHT)
+                sim.cur = { { x = 37, y = 2 }, { x = 36, y = 2 } }
+                sim.prev = table.clone(sim.cur)
+                frames(sim, 60) -- ~1s: 2 steps to the wall at x 39, then the hit
+                expect(sim.hp).is(Config.MAX_HP - 1)
+                expect(sim.hitTime).greaterThan(0.3)
+                expect(sim.hitTime).lessThan(0.5)
+            end)
+
+            test.case('colliding with its own body is a hit too', function(expect)
+                -- Head (3,3) heading down into body segment (3,4); the tail is
+                -- elsewhere, so the segment is solid.
+                local sim = arena(12, 9, {
+                    { x = 3, y = 3 },
+                    { x = 2, y = 3 },
+                    { x = 2, y = 4 },
+                    { x = 3, y = 4 },
+                    { x = 4, y = 4 },
+                }, Sim.DOWN)
+                Sim.stepSnake(sim)
+                expect(sim.state).is('playing')
+                expect(sim.hp).is(Config.MAX_HP - 1)
+                expect(sim.cur[1].x).is(3)
+                expect(sim.cur[1].y).is(3)
+            end)
+
+            test.case('a hit grants an invulnerability window', function(expect)
+                local function ram(sim: Sim.Sim)
+                    sim.cur = { { x = 10, y = 4 }, { x = 9, y = 4 } }
+                    sim.prev = table.clone(sim.cur)
+                    sim.dir = Sim.RIGHT
+                    Sim.stepSnake(sim)
+                end
+                local sim = arena(12, 9, { { x = 10, y = 4 }, { x = 9, y = 4 } }, Sim.RIGHT)
+                ram(sim)
+                expect(sim.hp).is(Config.MAX_HP - 1)
+                expect(sim.invulnLeft).is(Config.INVULN_TIME)
+                local firstHit = sim.hitTime
+
+                -- A second crash right away costs nothing and is not recorded...
+                ram(sim)
+                expect(sim.hp).is(Config.MAX_HP - 1)
+                expect(sim.hitTime).is(firstHit)
+                -- ...but the snake still bounces off it.
+                expect(sim.dir.x).is(0)
+
+                -- Still protected just before the window closes.
+                frames(sim, math.floor((Config.INVULN_TIME - 0.1) * 60))
+                ram(sim)
+                expect(sim.hp).is(Config.MAX_HP - 1)
+
+                -- Past it, the next crash costs 1 HP again.
+                frames(sim, 12)
+                expect(sim.invulnLeft).is(0)
+                ram(sim)
+                expect(sim.hp).is(Config.MAX_HP - 2)
+            end)
+
+            test.case('a bounce chain cannot drain several HP', function(expect)
+                -- A room three tiles tall: hit the east wall, bounce south, hit
+                -- the south wall one step later, bounce west. Two impacts, 1 HP.
+                local sim = arena(12, 5, { { x = 10, y = 2 }, { x = 9, y = 2 } }, Sim.RIGHT)
+                Sim.stepSnake(sim) -- east wall, turns south
+                expect(sim.hp).is(Config.MAX_HP - 1)
+                Sim.stepSnake(sim) -- (10, 3)
+                expect(sim.cur[1].y).is(3)
+                Sim.stepSnake(sim) -- south wall, inside the window
+                expect(sim.hp).is(Config.MAX_HP - 1)
+                expect(sim.dir.x).is(-1) -- turned west
+                -- The recorded impact is still the first one.
+                expect((sim.hitCell :: Sim.Cell).x).is(11)
+            end)
+
+            test.case('eating a guest heals 1 HP', function(expect)
+                local sim = Sim.new({
+                    '#############',
+                    '#....SP.....#',
+                    '#############',
+                }, 2)
+                Sim.start(sim)
+                sim.hp = 3
+                Sim.stepSnake(sim)
+                expect(sim.eaten).is(1)
+                expect(sim.hp).is(4)
+            end)
+
+            test.case('healing is capped at max HP', function(expect)
+                local sim = Sim.new({
+                    '#############',
+                    '#....SP.....#',
+                    '#############',
+                }, 2)
+                Sim.start(sim)
+                expect(sim.hp).is(Config.MAX_HP)
+                Sim.stepSnake(sim)
+                expect(sim.eaten).is(1)
+                expect(sim.hp).is(Config.MAX_HP)
+            end)
+
+            test.case('reaching 0 HP loses the game', function(expect)
+                local sim = arena(12, 9, { { x = 10, y = 4 }, { x = 9, y = 4 } }, Sim.RIGHT)
+                for i = 1, Config.MAX_HP do
+                    expect(sim.state).is('playing')
+                    sim.cur = { { x = 10, y = 4 }, { x = 9, y = 4 } }
+                    sim.prev = table.clone(sim.cur)
+                    sim.dir = Sim.RIGHT
+                    sim.invulnLeft = 0 -- skip the window between crashes
+                    Sim.stepSnake(sim)
+                    expect(sim.hp).is(Config.MAX_HP - i)
+                end
+                expect(sim.hp).is(0)
+                expect(sim.state).is('lost')
+            end)
+
+            test.case('three escapes still lose, at full health', function(expect)
+                local sim = Sim.new(
+                    room(12, 3, {
+                        { x = 9, y = 1, ch = 'S' },
+                        { x = 1, y = 1, ch = 'P' },
+                        { x = 2, y = 1, ch = 'P' },
+                        { x = 3, y = 1, ch = 'P' },
+                        { x = 1, y = 2, ch = 'E' },
+                        { x = 2, y = 2, ch = 'E' },
+                        { x = 3, y = 2, ch = 'E' },
+                    }),
+                    5
+                )
+                Sim.start(sim)
+                for _, g in sim.guests do
+                    g.state = 'flee'
+                end
+                Sim.stepGuests(sim)
+                expect(sim.hp).is(Config.MAX_HP)
+                expect(sim.state).is('lost')
+            end)
+        end)
+
+        test.group('bounce', function()
+            test.case('turns toward the side with the longer free run', function(expect)
+                -- Head against the east wall; 1 free tile north, 5 south.
+                local south = arena(12, 9, { { x = 10, y = 2 }, { x = 9, y = 2 } }, Sim.RIGHT)
+                Sim.stepSnake(south)
+                expect(south.dir.x).is(0)
+                expect(south.dir.y).is(1)
+
+                -- Mirrored: 5 free tiles north, 1 south.
+                local north = arena(12, 9, { { x = 10, y = 6 }, { x = 9, y = 6 } }, Sim.RIGHT)
+                Sim.stepSnake(north)
+                expect(north.dir.x).is(0)
+                expect(north.dir.y).is(-1)
+            end)
+
+            test.case('equal runs turn right', function(expect)
+                local sim = arena(12, 9, { { x = 10, y = 4 }, { x = 9, y = 4 } }, Sim.RIGHT)
+                Sim.stepSnake(sim)
+                expect(sim.dir.x).is(0)
+                expect(sim.dir.y).is(1) -- down is a right turn when heading east
+            end)
+
+            test.case('takes the only free side', function(expect)
+                -- Head in the north-east corner: north is wall, only south is free.
+                local sim = arena(12, 9, { { x = 10, y = 1 }, { x = 9, y = 1 } }, Sim.RIGHT)
+                Sim.stepSnake(sim)
+                expect(sim.dir.x).is(0)
+                expect(sim.dir.y).is(1)
+
+                -- Body below the head blocks south: only north is free.
+                local body = arena(12, 9, {
+                    { x = 10, y = 4 },
+                    { x = 10, y = 5 },
+                    { x = 9, y = 5 },
+                    { x = 8, y = 5 },
+                }, Sim.RIGHT)
+                Sim.stepSnake(body)
+                expect(body.dir.x).is(0)
+                expect(body.dir.y).is(-1)
+            end)
+
+            test.case('a bounce keeps the snake moving the next tick', function(expect)
+                local sim = arena(12, 9, { { x = 10, y = 2 }, { x = 9, y = 2 } }, Sim.RIGHT)
+                Sim.stepSnake(sim) -- hit, turn south
+                Sim.stepSnake(sim) -- and go
+                expect(sim.cur[1].x).is(10)
+                expect(sim.cur[1].y).is(3)
+                expect(sim.hp).is(Config.MAX_HP - 1)
+            end)
+
+            test.case('a hit clears queued turns', function(expect)
+                -- Heading up; RIGHT is queued into the east wall, then UP.
+                local sim = arena(12, 9, { { x = 10, y = 4 }, { x = 10, y = 5 } }, Sim.UP)
+                Sim.queueTurn(sim, Sim.RIGHT)
+                Sim.queueTurn(sim, Sim.UP)
+                expect(#sim.turns).is(2)
+                Sim.stepSnake(sim) -- RIGHT runs into the wall
+                expect(#sim.turns).is(0)
+            end)
+
+            test.case('boxed in: stops and takes damage once', function(expect)
+                -- One-row pocket: wall ahead, walls above and below, body behind.
+                local sim = Sim.new({
+                    '#####',
+                    '#...#',
+                    '#####',
+                }, 3)
+                Sim.start(sim)
+                sim.cur = { { x = 3, y = 1 }, { x = 2, y = 1 }, { x = 1, y = 1 } }
+                sim.prev = table.clone(sim.cur)
+                sim.dir = Sim.RIGHT
+                Sim.stepSnake(sim)
+                expect(sim.stopped).is(true)
+                expect(sim.hp).is(Config.MAX_HP - 1)
+                expect(sim.state).is('playing')
+
+                -- Time passes: it neither moves nor takes more damage.
+                frames(sim, 120)
+                expect(sim.cur[1].x).is(3)
+                expect(sim.hp).is(Config.MAX_HP - 1)
+                expect(sim.stopped).is(true)
+            end)
+
+            test.case('boxed in: only a direction onto a free tile restarts it', function(expect)
+                local sim = Sim.new({
+                    '#####',
+                    '#...#',
+                    '#####',
+                }, 3)
+                Sim.start(sim)
+                sim.cur = { { x = 3, y = 1 }, { x = 2, y = 1 }, { x = 1, y = 1 } }
+                sim.prev = table.clone(sim.cur)
+                sim.dir = Sim.RIGHT
+                Sim.stepSnake(sim)
+                expect(sim.stopped).is(true)
+
+                -- Every direction is blocked: wall, wall, wall, own neck.
+                Sim.queueTurn(sim, Sim.UP)
+                Sim.queueTurn(sim, Sim.DOWN)
+                Sim.queueTurn(sim, Sim.LEFT)
+                Sim.queueTurn(sim, Sim.RIGHT)
+                expect(sim.stopped).is(true)
+                expect(#sim.turns).is(0)
+
+                -- Knock out the wall above the head: pressing UP now goes.
+                sim.walls[1][4] = false -- row 0, column 3
+                Sim.queueTurn(sim, Sim.UP)
+                expect(sim.stopped).is(false)
+                frames(sim, 1)
+                expect(sim.cur[1].x).is(3)
+                expect(sim.cur[1].y).is(0)
+            end)
+        end)
+
+        test.group('lunge', function()
+            test.case('moves three steps at triple rate, then slows back down', function(expect)
+                local sim = arena(40, 5, { { x = 4, y = 2 }, { x = 3, y = 2 }, { x = 2, y = 2 } }, Sim.RIGHT)
+                expect(Sim.lunge(sim)).is(true)
+                expect(sim.lungeLeft).is(Config.LUNGE_STEPS)
+                -- 3 steps at 3x = one base tick = 12 frames, plus 1 frame.
+                frames(sim, 13)
+                expect(sim.cur[1].x).is(4 + Config.LUNGE_STEPS)
+                expect(sim.lungeLeft).is(0)
+                -- Normal pace afterwards: no step for the rest of the base tick.
+                frames(sim, 8)
+                expect(sim.cur[1].x).is(4 + Config.LUNGE_STEPS)
+                frames(sim, 12)
+                expect(sim.cur[1].x).is(4 + Config.LUNGE_STEPS + 1)
+            end)
+
+            test.case('costs vision and starts the cooldown', function(expect)
+                local sim = arena(40, 5, { { x = 4, y = 2 }, { x = 3, y = 2 } }, Sim.RIGHT)
+                expect(sim.vision).is(1)
+                expect(Sim.boostReady(sim)).is(true)
+                expect(Sim.boostCooldown(sim)).is(0)
+                Sim.lunge(sim)
+                expect(sim.vision).greaterThan(1 - Config.LUNGE_VISION_COST - 0.0001)
+                expect(sim.vision).lessThan(1 - Config.LUNGE_VISION_COST + 0.0001)
+                expect(Sim.boostReady(sim)).is(false)
+                expect(Sim.boostCooldown(sim)).is(1)
+                frames(sim, 90) -- half the cooldown
+                expect(Sim.boostCooldown(sim)).greaterThan(0.48)
+                expect(Sim.boostCooldown(sim)).lessThan(0.52)
+            end)
+
+            test.case('hitting a wall mid-lunge is a normal hit and ends the lunge', function(expect)
+                -- The wall at x 11 is 2 steps ahead of x 9... head at 9: step to 10, then hit.
+                local sim = arena(12, 9, { { x = 9, y = 4 }, { x = 8, y = 4 }, { x = 7, y = 4 } }, Sim.RIGHT)
+                Sim.lunge(sim)
+                frames(sim, 13)
+                expect(sim.hp).is(Config.MAX_HP - 1)
+                expect(sim.state).is('playing')
+                expect(sim.lungeLeft).is(0)
+                -- It advanced one step (to the tile before the wall) and no further.
+                expect(sim.cur[1].x).is(10)
+                expect((sim.hitCell :: Sim.Cell).x).is(11)
+                -- And bounced instead of carrying on east.
+                expect(sim.dir.x).is(0)
+            end)
+
+            test.case('the cooldown blocks a second lunge until it runs out', function(expect)
+                local sim = arena(80, 5, { { x = 4, y = 2 }, { x = 3, y = 2 } }, Sim.RIGHT)
+                expect(Sim.lunge(sim)).is(true)
+                frames(sim, 30) -- lunge over, cooldown still running
+                local vision = sim.vision
+                expect(Sim.lunge(sim)).is(false)
+                expect(sim.lungeLeft).is(0)
+                expect(sim.vision).is(vision) -- a refused lunge costs nothing
+
+                frames(sim, math.floor(Config.LUNGE_COOLDOWN * 60) - 30 + 2)
+                expect(Sim.boostReady(sim)).is(true)
+                expect(Sim.lunge(sim)).is(true)
+                expect(sim.vision).lessThan(vision)
+            end)
+
+            test.case('only works during play', function(expect)
+                local sim = Sim.new(room(12, 9, { { x = 5, y = 4, ch = 'S' } }), 1)
+                expect(Sim.lunge(sim)).is(false) -- still on the title screen
+                expect(sim.vision).is(1)
             end)
         end)
     end

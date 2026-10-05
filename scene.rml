@@ -55,6 +55,49 @@
             </TextValueRun>
         </Text>
 
+        <!-- Health and boost, in the bottom wall band (y 920-960). Placeholder
+             look: a groove and a bound fill per bar. The rectangle's width is
+             what is bound, so each converter's output range must match the
+             groove width (200). Each fill is declared before its groove: the
+             first sibling is drawn on top. -->
+        <Text x="48" y="940" originX="0" originY="0.5" sizingValue="autoWidth" name="HP Label" id="0:600">
+            <TextStylePaint fontSize="16" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:601">
+                <Fill name="Fill" id="0:602"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:603"/></Fill>
+            </TextStylePaint>
+            <TextValueRun styleId="0:601" text="HP" name="Label" id="0:604"/>
+        </Text>
+        <Shape x="84" y="940" name="HP Fill" id="0:615">
+            <Rectangle width="200" height="12" originX="0" originY="0.5"
+                       cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" name="Path" id="0:616">
+                <DataBindContext sourcePathIds="0:100-0:650" propertyKey="20" converterId="0:640" id="0:617"/>
+            </Rectangle>
+            <Fill name="Fill" id="0:618"><SolidColor colorValue="FFE53935" name="Color" id="0:619"/></Fill>
+        </Shape>
+        <Shape x="84" y="940" name="HP Track" id="0:610">
+            <Rectangle width="200" height="12" originX="0" originY="0.5"
+                       cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" name="Path" id="0:611"/>
+            <Fill name="Fill" id="0:612"><SolidColor colorValue="FF2A2F3A" name="Color" id="0:613"/></Fill>
+        </Shape>
+
+        <Text x="640" y="940" originX="0" originY="0.5" sizingValue="autoWidth" name="Boost Label" id="0:620">
+            <TextStylePaint fontSize="16" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:621">
+                <Fill name="Fill" id="0:622"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:623"/></Fill>
+            </TextStylePaint>
+            <TextValueRun styleId="0:621" text="BOOST" name="Label" id="0:624"/>
+        </Text>
+        <Shape x="712" y="940" name="Boost Fill" id="0:635">
+            <Rectangle width="200" height="12" originX="0" originY="0.5"
+                       cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" name="Path" id="0:636">
+                <DataBindContext sourcePathIds="0:100-0:653" propertyKey="20" converterId="0:641" id="0:637"/>
+            </Rectangle>
+            <Fill name="Fill" id="0:638"><SolidColor colorValue="FFFFD54F" name="Color" id="0:639"/></Fill>
+        </Shape>
+        <Shape x="712" y="940" name="Boost Track" id="0:630">
+            <Rectangle width="200" height="12" originX="0" originY="0.5"
+                       cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" name="Path" id="0:631"/>
+            <Fill name="Fill" id="0:632"><SolidColor colorValue="FF2A2F3A" name="Color" id="0:633"/></Fill>
+        </Shape>
+
         <!-- Playfield: a fill-sized layout parent gives the script the artboard
              size; FocusData is a direct child of the ScriptedLayout so it gets keys. -->
         <LayoutComponent width="960" height="960" styleId="0:11" name="Playfield Root" id="0:10">
@@ -96,12 +139,21 @@
 
     <FontAsset file="Inter.ttf" name="Inter" id="0:90"/>
     <!-- Modules register in document order: sim before whatever requires it. -->
+    <ScriptAsset file="config.luau" isModule="true" name="config" id="0:84"/>
     <ScriptAsset file="level.luau" isModule="true" name="level" id="0:83"/>
     <ScriptAsset file="sim.luau" isModule="true" name="sim" id="0:81"/>
     <ScriptAsset file="sim_test.luau" name="sim_test" id="0:82"/>
     <ScriptAsset file="main.luau" name="main" id="0:80"/>
 
     <DataConverterToString decimals="0" round="true" name="To Text" id="0:120"/>
+
+    <!-- HP (0 to MAX_HP in config.luau) onto the 200px groove. -->
+    <DataConverterRangeMapper minInput="0" maxInput="5" minOutput="0" maxOutput="200"
+                              clampLower="true" clampUpper="true" name="HP To Width" id="0:640"/>
+    <!-- boostCooldown is 1 just after a lunge and 0 when ready: the fill grows
+         as the boost recharges, full = ready. -->
+    <DataConverterRangeMapper minInput="0" maxInput="1" minOutput="200" maxOutput="0"
+                              clampLower="true" clampUpper="true" name="Recharge To Width" id="0:641"/>
 
     <DataEnumCustom name="GameState" id="0:110">
         <DataEnumValue key="ready" value="CLICK OR PRESS SPACE TO START" id="0:111"/>
@@ -115,12 +167,20 @@
         <ViewModelPropertyNumber name="length" id="0:102"/>
         <ViewModelPropertyNumber name="peopleLeft" id="0:103"/>
         <ViewModelPropertyNumber name="escaped" id="0:104"/>
+        <ViewModelPropertyNumber name="health" id="0:650"/>
+        <ViewModelPropertyNumber name="vision" id="0:651"/>
+        <ViewModelPropertyBoolean name="boostReady" id="0:652"/>
+        <ViewModelPropertyNumber name="boostCooldown" id="0:653"/>
         <ViewModelPropertyEnumCustom enumId="0:110" name="gameState" id="0:105"/>
         <ViewModelInstance exports="true" name="Default" id="0:106">
             <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:101" id="0:151"/>
             <ViewModelInstanceNumber propertyValue="5" viewModelPropertyId="0:102" id="0:152"/>
             <ViewModelInstanceNumber propertyValue="6" viewModelPropertyId="0:103" id="0:153"/>
             <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:104" id="0:154"/>
+            <ViewModelInstanceNumber propertyValue="5" viewModelPropertyId="0:650" id="0:660"/>
+            <ViewModelInstanceNumber propertyValue="1" viewModelPropertyId="0:651" id="0:661"/>
+            <ViewModelInstanceBoolean propertyValue="true" viewModelPropertyId="0:652" id="0:662"/>
+            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:653" id="0:663"/>
             <ViewModelInstanceEnum propertyValue="0:111" viewModelPropertyId="0:105" id="0:155"/>
         </ViewModelInstance>
     </ViewModel>

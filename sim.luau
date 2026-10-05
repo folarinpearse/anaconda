@@ -1,6 +1,9 @@
--- Anaconda rules: snake, guests, AI, eating, escaping, win/lose.
+-- Anaconda rules: snake, health, bounce, lunge, guests, AI, eating, escaping,
+-- win/lose.
 -- Pure Luau with no Rive API, so the headless tests (sim_test.luau) can drive
 -- it directly. main.luau renders it and mirrors the numbers into the view model.
+
+local Config = require('config')
 
 export type Cell = { x: number, y: number }
 
@@ -33,8 +36,21 @@ export type Sim = {
     cur: { Cell },
     dir: Cell,
     turns: { Cell },
-    snakeAcc: number,
+    snakeAcc: number, -- progress to the next step, in base-tick units
     guestAcc: number,
+    stopped: boolean, -- boxed in after a hit: waits for a legal turn
+
+    -- health
+    hp: number,
+    invulnLeft: number,
+    hitCell: Cell?, -- tile of the last damaging hit
+    hitTime: number, -- sim.time of that hit; negative if none yet
+    time: number, -- seconds since reset, for effects keyed to the clock
+
+    -- lunge
+    lungeLeft: number, -- boosted moves still to make
+    cooldownLeft: number,
+    vision: number, -- 0-1; each lunge costs some
 
     guests: { Guest },
     state: string, -- ready | playing | won | lost
@@ -47,9 +63,8 @@ export type Sim = {
 
 local Sim = {}
 
-local TICK = 1 / 8
-local GUEST_SPEED = 0.75 -- of snake speed
-local GUEST_TICK = TICK / GUEST_SPEED
+local TICK = 1 / Config.TICK_RATE
+local GUEST_TICK = TICK / Config.GUEST_SPEED
 local SIGHT = 7
 local ALERT_TIME = 0.5
 local CAUGHT_TIME = 0.4
@@ -124,6 +139,75 @@ local function activeGuestAt(sim: Sim, x: number, y: number): Guest?
         if isActive(g) and g.cell.x == x and g.cell.y == y then
             return g
         end
+    end
+    return nil
+end
+
+-- Whether the snake's head cannot enter (x, y) on the next step, and the guest
+-- standing there if it can. The tail cell is free unless a guest is eaten on
+-- the same step: then the tail does not advance and still counts.
+local function moveBlocked(sim: Sim, x: number, y: number): (boolean, Guest?)
+    if isWall(sim, x, y) then
+        return true, nil
+    end
+    local prey = activeGuestAt(sim, x, y)
+    local n = #sim.cur
+    local solid = if prey ~= nil then n else n - 1
+    for i = 1, solid do
+        local seg = sim.cur[i]
+        if seg.x == x and seg.y == y then
+            return true, nil
+        end
+    end
+    return false, prey
+end
+
+-- Free tiles in a straight line from the head along `dir`. A body segment stops
+-- mattering once the tail has had time to pull clear of it: segment i is gone by
+-- the time the head makes its (n - i + 1)th step.
+local function freeRun(sim: Sim, dir: Cell): number
+    local head = sim.cur[1]
+    local n = #sim.cur
+    local run = 0
+    for k = 1, sim.cols + sim.rows do
+        local x = head.x + dir.x * k
+        local y = head.y + dir.y * k
+        if isWall(sim, x, y) then
+            break
+        end
+        local inBody = false
+        for i = 1, n - k do
+            local seg = sim.cur[i]
+            if seg.x == x and seg.y == y then
+                inBody = true
+                break
+            end
+        end
+        if inBody then
+            break
+        end
+        run = k
+    end
+    return run
+end
+
+-- The 90 degree turn a bounce takes: the only free side, else the side with the
+-- longer free run (a tie turns right, clockwise on screen), else nil.
+local function chooseBounce(sim: Sim, dir: Cell): Cell?
+    local head = sim.cur[1]
+    local right: Cell = { x = -dir.y, y = dir.x }
+    local left: Cell = { x = dir.y, y = -dir.x }
+    local rightFree = not moveBlocked(sim, head.x + right.x, head.y + right.y)
+    local leftFree = not moveBlocked(sim, head.x + left.x, head.y + left.y)
+    if rightFree and leftFree then
+        if freeRun(sim, left) > freeRun(sim, right) then
+            return left
+        end
+        return right
+    elseif rightFree then
+        return right
+    elseif leftFree then
+        return left
     end
     return nil
 end
@@ -231,6 +315,7 @@ local function eat(sim: Sim, g: Guest)
     g.caughtLeft = CAUGHT_TIME
     sim.eaten += 1
     sim.score += SCORE_PER_GUEST
+    sim.hp = math.min(Config.MAX_HP, sim.hp + Config.HEAL_PER_GUEST)
     checkWinLose(sim)
 end
 
@@ -356,6 +441,15 @@ function Sim.reset(sim: Sim, state: string)
     sim.turns = {}
     sim.snakeAcc = 0
     sim.guestAcc = 0
+    sim.stopped = false
+    sim.hp = Config.MAX_HP
+    sim.invulnLeft = 0
+    sim.hitCell = nil
+    sim.hitTime = -1
+    sim.time = 0
+    sim.lungeLeft = 0
+    sim.cooldownLeft = 0
+    sim.vision = 1
     sim.guests = {}
     for i, s in sim.spawns do
         table.insert(sim.guests, newGuest(sim, i, { x = s.x, y = s.y }))
@@ -409,6 +503,15 @@ function Sim.new(level: { string }, seed: number): Sim
         turns = {},
         snakeAcc = 0,
         guestAcc = 0,
+        stopped = false,
+        hp = Config.MAX_HP,
+        invulnLeft = 0,
+        hitCell = nil,
+        hitTime = -1,
+        time = 0,
+        lungeLeft = 0,
+        cooldownLeft = 0,
+        vision = 1,
         guests = {},
         state = 'ready',
         score = 0,
@@ -436,6 +539,18 @@ function Sim.peopleLeft(sim: Sim): number
 end
 
 function Sim.queueTurn(sim: Sim, dir: Cell)
+    if sim.stopped then
+        -- Boxed in: any direction onto a free tile gets the snake moving again,
+        -- on the very next update.
+        local head = sim.cur[1]
+        if not moveBlocked(sim, head.x + dir.x, head.y + dir.y) then
+            sim.dir = dir
+            sim.stopped = false
+            sim.turns = {}
+            sim.snakeAcc = TICK
+        end
+        return
+    end
     if #sim.turns >= MAX_QUEUED_TURNS then
         return
     end
@@ -452,32 +567,55 @@ function Sim.queueTurn(sim: Sim, dir: Cell)
     table.insert(sim.turns, dir)
 end
 
--- One snake step. Wall or self collision loses. Entering a guest's tile eats
--- it: the tail does not advance that tick, so the snake grows by one, and the
--- whole old body (tail included) still counts for self-collision.
+-- A wall or self collision. The snake stays where it is, queued turns and any
+-- lunge are dropped, and it bounces: turns 90 degrees toward free space, or
+-- stops if there is none. Outside the invulnerability window the hit also costs
+-- 1 HP and is recorded; at 0 HP the game is lost.
+local function hit(sim: Sim, x: number, y: number)
+    sim.turns = {}
+    sim.lungeLeft = 0
+    sim.prev = table.clone(sim.cur) -- nothing slides this tick
+    if sim.invulnLeft <= 0 then
+        sim.hp = math.max(0, sim.hp - 1)
+        sim.invulnLeft = Config.INVULN_TIME
+        sim.hitCell = { x = x, y = y }
+        sim.hitTime = sim.time
+        if sim.hp <= 0 then
+            sim.state = 'lost'
+            return
+        end
+    end
+    local turn = chooseBounce(sim, sim.dir)
+    if turn ~= nil then
+        sim.dir = turn
+    else
+        sim.stopped = true
+        sim.snakeAcc = 0
+    end
+end
+
+-- One snake step. A blocked tile is a hit (see `hit`) and the snake does not
+-- move. Entering a guest's tile eats it: the tail does not advance that tick,
+-- so the snake grows by one, and the whole old body (tail included) still counts
+-- for self-collision.
 function Sim.stepSnake(sim: Sim)
+    if sim.stopped then
+        return
+    end
     if #sim.turns > 0 then
         sim.dir = table.remove(sim.turns, 1) :: Cell
     end
     local head = sim.cur[1]
     local nx = head.x + sim.dir.x
     local ny = head.y + sim.dir.y
-    if isWall(sim, nx, ny) then
-        sim.state = 'lost'
+    local blocked, prey = moveBlocked(sim, nx, ny)
+    if blocked then
+        hit(sim, nx, ny)
         return
     end
 
-    local prey = activeGuestAt(sim, nx, ny)
     local n = #sim.cur
     local solid = if prey ~= nil then n else n - 1
-    for i = 1, solid do
-        local seg = sim.cur[i]
-        if seg.x == nx and seg.y == ny then
-            sim.state = 'lost'
-            return
-        end
-    end
-
     local nextCells: { Cell } = { { x = nx, y = ny } }
     for i = 1, solid do
         table.insert(nextCells, sim.cur[i])
@@ -488,10 +626,34 @@ function Sim.stepSnake(sim: Sim)
     end
     sim.prev = prevCells
     sim.cur = nextCells
+    if sim.lungeLeft > 0 then
+        sim.lungeLeft -= 1
+    end
 
     if prey ~= nil then
         eat(sim, prey)
     end
+end
+
+-- Starts a lunge: the next LUNGE_STEPS moves run at LUNGE_MULTIPLIER x the tick
+-- rate. Refused outside play, while boxed in, or during the cooldown.
+function Sim.lunge(sim: Sim): boolean
+    if sim.state ~= 'playing' or sim.stopped or sim.cooldownLeft > 0 then
+        return false
+    end
+    sim.lungeLeft = Config.LUNGE_STEPS
+    sim.cooldownLeft = Config.LUNGE_COOLDOWN
+    sim.vision = math.max(0, sim.vision - Config.LUNGE_VISION_COST)
+    return true
+end
+
+function Sim.boostReady(sim: Sim): boolean
+    return sim.cooldownLeft <= 0
+end
+
+-- 1 right after a lunge, falling to 0 as the cooldown runs out.
+function Sim.boostCooldown(sim: Sim): number
+    return math.clamp(sim.cooldownLeft / Config.LUNGE_COOLDOWN, 0, 1)
 end
 
 -- One guest step (guests run at 75% of snake speed).
@@ -540,6 +702,7 @@ function Sim.update(sim: Sim, dt: number)
         end
     end
     if sim.state ~= 'playing' then
+        sim.time += dt -- hit effects keep running on the end screen
         return
     end
     for _, g in sim.guests do
@@ -550,11 +713,40 @@ function Sim.update(sim: Sim, dt: number)
             end
         end
     end
-    sim.snakeAcc += dt
-    while sim.snakeAcc >= TICK and sim.state == 'playing' do
-        sim.snakeAcc -= TICK
-        Sim.stepSnake(sim)
+
+    -- The snake advances in slices, one per step, so a lunge's faster rate
+    -- starts and stops on the exact step and the timers see the true time.
+    -- snakeAcc counts in base-tick units: a lunge fills it LUNGE_MULTIPLIER
+    -- times faster.
+    local function pass(d: number)
+        sim.time += d
+        sim.invulnLeft = math.max(0, sim.invulnLeft - d)
+        sim.cooldownLeft = math.max(0, sim.cooldownLeft - d)
     end
+    local remaining = dt
+    while remaining > 0 and sim.state == 'playing' do
+        if sim.stopped then
+            pass(remaining)
+            remaining = 0
+            break
+        end
+        local rate = if sim.lungeLeft > 0 then Config.LUNGE_MULTIPLIER else 1
+        local need = math.max(0, TICK - sim.snakeAcc) / rate
+        if remaining >= need then
+            pass(need)
+            remaining -= need
+            sim.snakeAcc = 0
+            Sim.stepSnake(sim)
+        else
+            pass(remaining)
+            sim.snakeAcc += remaining * rate
+            remaining = 0
+        end
+    end
+    if remaining > 0 then
+        sim.time += remaining
+    end
+
     sim.guestAcc += dt
     while sim.guestAcc >= GUEST_TICK and sim.state == 'playing' do
         sim.guestAcc -= GUEST_TICK
