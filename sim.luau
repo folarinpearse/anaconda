@@ -104,6 +104,7 @@ local function isWall(sim: Sim, x: number, y: number): boolean
     end
     return sim.walls[y + 1][x + 1]
 end
+Sim.isWall = isWall
 
 local function isExit(sim: Sim, x: number, y: number): boolean
     if x < 0 or y < 0 or x >= sim.cols or y >= sim.rows then

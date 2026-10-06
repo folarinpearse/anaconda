@@ -22,12 +22,16 @@ struct Uniforms {
     impactAge: f32,        // 64  seconds since that hit
     coneLen: f32,          // 68  tiles, from vision
     coneHalf: f32,         // 72  radians, from vision
-    _pad: f32,             // 76
+    ambient: f32,          // 76  light outside the cone, 0-1
+    gridSize: vec2<f32>,   // 80  level size, tiles (and wall mask size, px)
+    _pad0: f32,            // 88
+    _pad1: f32,            // 92
 };
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var sceneTex: texture_2d<f32>;
 @group(0) @binding(2) var sceneSamp: sampler;
+@group(0) @binding(3) var maskTex: texture_2d<f32>; // one texel per tile, 1 = wall
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -78,6 +82,53 @@ fn fbm(p: vec2<f32>) -> f32 {
     return sum;
 }
 
+// Wall occlusion. RAY_STEP, MAX_STEPS and WALL_DEPTH equal OCCLUSION_STEP,
+// OCCLUSION_MAX_STEPS and OCCLUSION_DEPTH in config.luau; fog.luau's
+// lineOfSight is the CPU twin of `visibility` below, with hard tile edges
+// where this one is feathered. Keep them in step.
+const RAY_STEP: f32 = 0.25;
+const MAX_STEPS: i32 = 48;
+const WALL_DEPTH: f32 = 0.4;
+
+// How solid the level is at a point in tile units. The mask is sampled with
+// linear filtering, so it is soft across tile edges; the smoothstep keeps
+// that softness to the edge and makes tile centres fully solid.
+fn wallness(p: vec2<f32>) -> f32 {
+    let m = textureSampleLevel(maskTex, sceneSamp, p / u.gridSize, 0.0).r;
+    return smoothstep(0.55, 0.95, m);
+}
+
+// 1 where `p` can see `src`, falling to 0 where walls are in the way. March
+// from `p` toward `src` and add up how far the ray runs inside walls. A ray
+// that has only just left a wall face (the point sits at most about WALL_DEPTH
+// inside the first wall it meets) stays lit, so the faces the head looks at
+// are visible; a ray that has to cross a wall's body is shadowed, so nothing
+// behind it is. Corner clips are short, which keeps the shadow edge soft. The
+// tile `src` is in never counts (the impact glow's source is a wall tile).
+fn visibility(src: vec2<f32>, p: vec2<f32>) -> f32 {
+    let toSrc = src - p;
+    let len = length(toSrc);
+    if (len < 0.001) {
+        return 1.0;
+    }
+    let dir = toSrc / len;
+    let step = max(RAY_STEP, len / f32(MAX_STEPS));
+    let srcTile = floor(src);
+    var inside = 0.0;
+    for (var i = 1; i <= MAX_STEPS; i = i + 1) {
+        let s = (f32(i) - 0.5) * step;
+        if (s >= len) {
+            break;
+        }
+        let q = p + dir * s;
+        if (all(floor(q) == srcTile)) {
+            continue;
+        }
+        inside = inside + wallness(q) * step;
+    }
+    return 1.0 - smoothstep(WALL_DEPTH * 0.5, WALL_DEPTH * 1.5, inside);
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let scene = textureSample(sceneTex, sceneSamp, in.uv);
@@ -101,10 +152,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let ang = atan2(cross, along) + (n2 - 0.5) * 0.35;
     let coneLength = 1.0 - smoothstep(u.coneLen * 0.55, u.coneLen, dist);
     let coneWidth = 1.0 - smoothstep(u.coneHalf * 0.55, u.coneHalf, ang);
-    let cone = coneLength * coneWidth;
+    var cone = coneLength * coneWidth;
 
     // A faint disc of about a tile always stays lit around the head.
-    let near = (1.0 - smoothstep(0.5, 1.5, dist0)) * 0.35;
+    var near = (1.0 - smoothstep(0.5, 1.5, dist0)) * 0.35;
+
+    // Walls block the cone and the disc. (A reveal, below, ignores them.)
+    if (max(cone, near) > 0.002) {
+        let seen = visibility(u.headPos, t);
+        cone = cone * seen;
+        near = near * seen;
+    }
 
     // Candle flicker on everything the head lights.
     let flicker = 1.0 + 0.05 * sin(time * 11.0) + 0.08 * (vnoise(vec2<f32>(time * 7.0, 3.1)) - 0.5);
@@ -116,7 +174,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Wall impact: a soft glow at the struck tile that fades over one second,
     // lighting the walls around it.
     let ig = clamp(1.0 - u.impactAge, 0.0, 1.0);
-    let glow = ig * ig * (1.0 - smoothstep(0.3, 2.0, distance(t, u.impactPos)));
+    var glow = ig * ig * (1.0 - smoothstep(0.3, 2.0, distance(t, u.impactPos)));
+    if (glow > 0.002) {
+        glow = glow * visibility(u.impactPos, t); // the glow does not pass walls either
+    }
     light = max(light, glow * 0.95);
     col = mix(col, col * vec3<f32>(1.35, 0.95, 0.6), glow * 0.7);
 
@@ -127,8 +188,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let redAmt = edge * hurt;
     col = mix(col, col * vec3<f32>(1.5, 0.5, 0.45), redAmt * 0.8);
 
-    let ambient = 0.025;
-    col = col * (ambient + (1.0 - ambient) * clamp(light, 0.0, 1.0));
+    col = col * (u.ambient + (1.0 - u.ambient) * clamp(light, 0.0, 1.0));
 
     // Fog and blood-glow light up the dark side of the edge.
     let fog = edge * (0.3 + 0.7 * n1);

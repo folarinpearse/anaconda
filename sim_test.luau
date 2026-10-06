@@ -951,5 +951,72 @@ return function(): Tests
                 expect(#rings.list).is(0)
             end)
         end)
+
+        test.group('wall occlusion (CPU)', function()
+            -- Head faces east in the left room; a wall at x 5 splits the level,
+            -- with a doorway in it on row 2.
+            local level = {
+                '###########',
+                '#....#....#',
+                '#.........#',
+                '#....#....#',
+                '###########',
+            }
+            local function isWall(tx: number, ty: number): boolean
+                if ty < 0 or ty >= #level or tx < 0 or tx >= #level[1] then
+                    return true
+                end
+                return string.sub(level[ty + 1], tx + 1, tx + 1) == '#'
+            end
+            local FULL = 1
+
+            test.case('a guest behind a wall is hidden', function(expect)
+                -- Same row as the head, straight through the wall at (5, 1).
+                local hx, hy = 2.5, 1.5
+                -- Without the wall check the cone alone would show it...
+                expect(Fog.inView(hx, hy, 1, 0, FULL, 0, 8.5, 1.5)).is(true)
+                -- ...with it, it is hidden.
+                expect(Fog.inView(hx, hy, 1, 0, FULL, 0, 8.5, 1.5, isWall)).is(false)
+            end)
+
+            test.case('a guest in line with the doorway is visible', function(expect)
+                expect(Fog.inView(2.5, 2.5, 1, 0, FULL, 0, 8.5, 2.5, isWall)).is(true)
+                expect(Fog.inView(2.5, 2.5, 1, 0, FULL, 0, 6.5, 2.5, isWall)).is(true)
+            end)
+
+            test.case('a guest off the doorway line is hidden by the wall beside it', function(expect)
+                -- From the head the line to (8.5, 1.5) clips the wall at (5, 1).
+                expect(Fog.inView(2.5, 2.5, 1, 0, FULL, 0, 8.5, 1.5)).is(true) -- the cone alone would see it
+                expect(Fog.inView(2.5, 2.5, 1, 0, FULL, 0, 8.5, 1.5, isWall)).is(false)
+            end)
+
+            test.case('the first wall face stays lit and what is behind it does not', function(expect)
+                -- Head (2.5, 1.5) looking at the wall tile (5, 1), which spans x 5-6.
+                expect(Fog.lineOfSight(isWall, 2.5, 1.5, 5.25, 1.5)).is(true) -- just inside the face
+                expect(Fog.lineOfSight(isWall, 2.5, 1.5, 5.8, 1.5)).is(false) -- deep in the wall
+                expect(Fog.lineOfSight(isWall, 2.5, 1.5, 6.5, 1.5)).is(false) -- on the far side
+                expect(Fog.lineOfSight(isWall, 2.5, 1.5, 4.5, 1.5)).is(true) -- open floor in front
+            end)
+
+            test.case('a reveal ignores walls', function(expect)
+                expect(Fog.inView(2.5, 1.5, 1, 0, FULL, 0.6, 8.5, 1.5, isWall)).is(true)
+            end)
+
+            test.case('an alerted guest behind a wall rings, one in the doorway line does not', function(expect)
+                local function run(guestCell: Sim.Cell, headY: number): number
+                    local rings = Fog.newRings()
+                    local g = { id = 1, cell = guestCell, state = 'alert', gone = false }
+                    for _ = 1, 30 do
+                        Fog.stepRings(rings, { g }, function(any: any): boolean
+                            local c = any.cell
+                            return Fog.inView(2.5, headY, 1, 0, FULL, 0, c.x + 0.5, c.y + 0.5, isWall)
+                        end, 1 / 60)
+                    end
+                    return #rings.list
+                end
+                expect(run({ x = 8, y = 1 }, 1.5)).is(1) -- behind the wall
+                expect(run({ x = 8, y = 2 }, 2.5)).is(0) -- visible through the doorway
+            end)
+        end)
     end
 end

@@ -1,6 +1,9 @@
 -- Vision, dread and sound-ring maths. Pure Luau with no Rive API so the
 -- headless tests can drive it. main.luau feeds the results to vision.wgsl as
--- uniforms and uses `light`/`inView` to decide which guests are hidden.
+-- uniforms and uses `inView` (cone, head disc and wall line of sight) to decide
+-- which guests are hidden. Two rules here exist in vision.wgsl as well and must
+-- be kept in step: the cone shape (`light`) and the wall occlusion
+-- (`lineOfSight`).
 -- Positions are in tile units where cell (x, y) has its centre at (x + 0.5,
 -- y + 0.5). `v` is the vision value, VISION_FLOOR to 1.
 
@@ -58,7 +61,48 @@ function Fog.light(hx: number, hy: number, dx: number, dy: number, v: number, x:
     return math.max(cone, near)
 end
 
--- Whether a point counts as inside the visible area. A reveal shows it all.
+-- Whether a wall stands between a point (px, py) and a source (sx, sy), both
+-- in tile units. This is the CPU twin of `visibility` in vision.wgsl: march
+-- from the point toward the source in steps of OCCLUSION_STEP (stretched so
+-- there are at most OCCLUSION_MAX_STEPS), add up how far the ray runs inside
+-- wall tiles, and call the view blocked once that reaches OCCLUSION_DEPTH.
+-- A point just inside the first wall face the head looks at is therefore
+-- still seen, while a point behind a wall (or a floor tile on its far side)
+-- is not. The shader feathers where this cuts hard. The source's own tile
+-- never counts. `isWall(tx, ty)` takes integer tile coordinates.
+function Fog.lineOfSight(isWall: (number, number) -> boolean, sx: number, sy: number, px: number, py: number): boolean
+    local ox = sx - px
+    local oy = sy - py
+    local len = math.sqrt(ox * ox + oy * oy)
+    if len < 0.001 then
+        return true
+    end
+    local dirX = ox / len
+    local dirY = oy / len
+    local step = math.max(Config.OCCLUSION_STEP, len / Config.OCCLUSION_MAX_STEPS)
+    local srcX = math.floor(sx)
+    local srcY = math.floor(sy)
+    local inside = 0.0
+    for i = 1, Config.OCCLUSION_MAX_STEPS do
+        local s = (i - 0.5) * step
+        if s >= len then
+            break
+        end
+        local tx = math.floor(px + dirX * s)
+        local ty = math.floor(py + dirY * s)
+        if not (tx == srcX and ty == srcY) and isWall(tx, ty) then
+            inside += step
+            if inside >= Config.OCCLUSION_DEPTH then
+                return false
+            end
+        end
+    end
+    return true
+end
+
+-- Whether a point counts as inside the visible area: lit by the cone or the
+-- head's disc and, when `isWall` is given, not hidden behind a wall. A reveal
+-- shows it all, walls or not.
 function Fog.inView(
     hx: number,
     hy: number,
@@ -67,12 +111,19 @@ function Fog.inView(
     v: number,
     reveal: number,
     x: number,
-    y: number
+    y: number,
+    isWall: ((number, number) -> boolean)?
 ): boolean
     if reveal > 0.05 then
         return true
     end
-    return Fog.light(hx, hy, dx, dy, v, x, y) > Config.VISIBLE_LIGHT
+    if Fog.light(hx, hy, dx, dy, v, x, y) <= Config.VISIBLE_LIGHT then
+        return false
+    end
+    if isWall ~= nil then
+        return Fog.lineOfSight(isWall, hx, hy, x, y)
+    end
+    return true
 end
 
 -- Beats per second: slow at full vision, fast at the floor.

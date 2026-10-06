@@ -47,6 +47,10 @@ type Game = {
     ubo: GPUBuffer?,
     bind: GPUBindGroup?,
     gpuSampler: GPUSampler?,
+    mask: Canvas?, -- one pixel per tile, white = wall: what the shader ray-marches through
+    maskPath: Path,
+    maskPaint: Paint,
+    maskDirty: boolean, -- the mask needs drawing (again)
     imageSampler: ImageSampler,
     uniforms: buffer,
     gpuDirty: boolean, -- canvases need (re)building for the current size
@@ -81,7 +85,7 @@ local KEY_SPACE = 32
 local KEY_SHIFTS: { [number]: boolean } = { [340] = true, [344] = true } -- left, right
 local SHAKE_AMPLITUDE = 5 -- px at the moment of impact
 local BACKGROUND = Color.rgb(20, 23, 28) -- the artboard fill, behind the letterbox
-local UNIFORM_SIZE = 80 -- bytes; the Uniforms struct in vision.wgsl
+local UNIFORM_SIZE = 96 -- bytes; the Uniforms struct in vision.wgsl
 local TURN_SPEED = 14 -- how fast the cone swings round to a new heading, per second
 local PI = math.pi
 
@@ -289,9 +293,12 @@ function advance(self: Game, seconds: number): boolean
         local hx, hy = headTile(sim)
         local dx = math.cos(self.dirAngle)
         local dy = math.sin(self.dirAngle)
+        local function isWall(tx: number, ty: number): boolean
+            return Sim.isWall(sim, tx, ty)
+        end
         Fog.stepRings(self.rings, sim.guests, function(g: any)
             local guest = g :: Sim.Guest
-            return Fog.inView(hx, hy, dx, dy, sim.vision, sim.reveal, guest.cell.x + 0.5, guest.cell.y + 0.5)
+            return Fog.inView(hx, hy, dx, dy, sim.vision, sim.reveal, guest.cell.x + 0.5, guest.cell.y + 0.5, isWall)
         end, seconds)
     else
         self.rings = Fog.newRings()
@@ -346,13 +353,37 @@ local function buildGpu(self: Game)
         self.ubo = GPUBuffer.new({ size = UNIFORM_SIZE, usage = 'uniform' })
         self.gpuSampler = GPUSampler.new({ min = 'linear', mag = 'linear' })
     end
+    -- The wall mask is one pixel per tile whatever the screen size, so it is
+    -- made once and only drawn again if it is (re)created.
+    local mask: Canvas
+    local existingMask = self.mask
+    if existingMask ~= nil then
+        mask = existingMask
+    else
+        mask = context:canvas({ width = self.sim.cols, height = self.sim.rows })
+        self.mask = mask
+        self.maskDirty = true
+    end
     self.bind = GPUBindGroup.new({
         layout = pipeline:getBindGroupLayout(0),
         ubos = { { slot = 0, buffer = self.ubo :: GPUBuffer } },
-        textures = { { slot = 1, view = scene.image:view() } },
+        textures = { { slot = 1, view = scene.image:view() }, { slot = 3, view = mask.image:view() } },
         samplers = { { slot = 2, sampler = self.gpuSampler :: GPUSampler } },
     })
     self.gpuDirty = false
+end
+
+-- White wall tiles on black, from the level data (not the wall artwork, so it
+-- survives the art pass).
+local function drawMask(self: Game)
+    local mask = self.mask :: Canvas
+    local r = mask:beginFrame({ clearColor = Color.rgb(0, 0, 0) })
+    r:save()
+    r:transform(Mat2D.withScale(mask.width / (TILE * self.sim.cols), mask.height / (TILE * self.sim.rows)))
+    r:drawPath(self.maskPath, self.maskPaint)
+    r:restore()
+    mask:endFrame()
+    self.maskDirty = false
 end
 
 -- Fills the shader's Uniforms struct (layout in vision.wgsl).
@@ -387,7 +418,11 @@ local function writeUniforms(self: Game, ox: number, oy: number, pxPerTile: numb
     buffer.writef32(b, 64, impactAge)
     buffer.writef32(b, 68, Fog.coneLength(sim.vision))
     buffer.writef32(b, 72, Fog.coneHalfAngle(sim.vision))
-    buffer.writef32(b, 76, 0)
+    buffer.writef32(b, 76, Config.AMBIENT)
+    buffer.writef32(b, 80, sim.cols)
+    buffer.writef32(b, 84, sim.rows)
+    buffer.writef32(b, 88, 0)
+    buffer.writef32(b, 92, 0)
     ;(self.ubo :: GPUBuffer):write(b)
 end
 
@@ -450,6 +485,10 @@ function draw(self: Game, renderer: Renderer)
         local gpu = self.gpu :: GPUCanvas
         -- Canvas pixels per point, so the scene lines up with the artboard.
         local k = scene.width / self.size.x
+
+        if self.maskDirty then
+            drawMask(self)
+        end
 
         -- 1. Only the floor plan, walls, exits and guests go to the offscreen canvas.
         local sr = scene:beginFrame({ clearColor = BACKGROUND })
@@ -521,6 +560,7 @@ return function(context: Context): Layout<Game>
     -- Static level geometry: built once here, drawn every frame, never mutated.
     local floorPath = Path.new()
     local wallPath = Path.new()
+    local maskPath = Path.new() -- same tiles, from the level data alone: see drawMask
     local exitPath = Path.new()
     local world = TILE * sim.cols
     floorPath:moveTo(Vector.xy(0, 0))
@@ -532,6 +572,7 @@ return function(context: Context): Layout<Game>
         for x = 0, sim.cols - 1 do
             if sim.walls[y + 1][x + 1] then
                 addRect(wallPath, x * TILE, y * TILE)
+                addRect(maskPath, x * TILE, y * TILE)
             elseif sim.exitTile[y + 1][x + 1] then
                 addRect(exitPath, x * TILE, y * TILE)
             end
@@ -544,6 +585,8 @@ return function(context: Context): Layout<Game>
         people = {},
         floorPath = floorPath,
         wallPath = wallPath,
+        maskPath = maskPath,
+        maskPaint = Paint.with({ style = 'fill', color = Color.rgb(255, 255, 255) }),
         exitPath = exitPath,
         floorPaint = Paint.with({ style = 'fill', color = Color.rgb(27, 31, 38) }),
         wallPaint = Paint.with({ style = 'fill', color = Color.rgb(110, 116, 124) }),
@@ -572,6 +615,8 @@ return function(context: Context): Layout<Game>
         ubo = nil,
         bind = nil,
         gpuSampler = nil,
+        mask = nil,
+        maskDirty = true,
         imageSampler = ImageSampler('clamp', 'clamp', 'bilinear'),
         uniforms = buffer.create(UNIFORM_SIZE),
         gpuDirty = true,

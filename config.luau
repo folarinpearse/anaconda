@@ -32,6 +32,15 @@ return {
     CONE_ANGLE_MIN = 0.28,
     CONE_ANGLE_MAX = 0.80,
     NEAR_LIGHT = 0.35, -- brightness of the ever-present disc around the head
+    AMBIENT = 0.004, -- light level outside the cone, 0 (black) to 1 (unlit scene)
+
+    -- Wall occlusion: rays from a point toward the head, this far apart, at
+    -- most this many, and how many tiles of wall a ray may cross and still count
+    -- as seeing a wall face. vision.wgsl repeats all three (RAY_STEP, MAX_STEPS,
+    -- WALL_DEPTH) and fog.luau reads these: keep them in step.
+    OCCLUSION_STEP = 0.25, -- tiles
+    OCCLUSION_MAX_STEPS = 48,
+    OCCLUSION_DEPTH = 0.4, -- tiles
     VISIBLE_LIGHT = 0.2, -- light above this counts as "in view" for sound rings
 
     -- Dread
