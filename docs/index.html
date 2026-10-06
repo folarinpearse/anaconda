@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Anaconda</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;            /* the page never scrolls */
+    background: #0b0d10;
+    overscroll-behavior: none;
+  }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* The artboard is 960x960: a square canvas as large as fits the window,
+     centred, with the dark page background as the letterbox. */
+  #game {
+    width: min(100vw, 100vh);
+    height: min(100vw, 100vh);
+    display: block;
+    outline: none;               /* no focus ring around the game */
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="game" tabindex="0" aria-label="Anaconda"></canvas>
+
+<script src="vendor/rive.js"></script>
+<script>
+(function () {
+  var canvas = document.getElementById('game');
+
+  // Self-hosted runtime: wasm next to rive.js instead of the unpkg default.
+  rive.RuntimeLoader.setWasmUrl('vendor/rive.wasm');
+
+  function focusGame() { canvas.focus({ preventScroll: true }); }
+
+  // Keep the drawing surface matched to the canvas' CSS size (capped at 2x).
+  var r;
+  function resize() {
+    if (!r) return;
+    r.resizeDrawingSurfaceToCanvas(Math.min(window.devicePixelRatio || 1, 2));
+  }
+
+  r = new rive.Rive({
+    src: 'anaconda.riv',
+    canvas: canvas,
+    artboard: 'Anaconda',
+    stateMachine: 'State Machine 1',
+    autoplay: true,
+    autoBind: false,                 // bound explicitly in onLoad
+    enableGPUCanvas: true,           // the file's vision shader draws through a GPUCanvas
+    tabIndex: 0,
+    layout: new rive.Layout({ fit: rive.Fit.Contain, alignment: rive.Alignment.Center }),
+    onLoad: function () {
+      var vm = r.viewModelByName('Game');
+      var inst = vm && (vm.instanceByName('Default') || vm.defaultInstance());
+      if (inst) {
+        r.bindViewModelInstance(inst);
+      } else {
+        console.error('Anaconda: view model "Game" not found in the file');
+      }
+      resize();
+      focusGame();
+    },
+    onLoadError: function (e) {
+      console.error('Anaconda: failed to load anaconda.riv', e);
+    }
+  });
+  window.anaconda = r;               // handy in devtools
+
+  window.addEventListener('resize', resize);
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);
+
+  // Focus on click / touch, and again whenever the window comes back.
+  canvas.addEventListener('pointerdown', focusGame);
+  window.addEventListener('focus', focusGame);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) focusGame();
+  });
+  focusGame();
+
+  // Arrow keys and Space must never scroll the page. Rive already cancels the
+  // keys the game consumes; this is the backstop for any that fall through.
+  // While the game holds a key-consuming node, Rive moves DOM focus from the
+  // canvas to its own hidden <input> (the "text input proxy") and reads keys
+  // from there, so focus on that input is normal and left alone. Only when
+  // focus has been lost altogether (body) is it pulled back to the canvas.
+  var GAME_KEYS = { ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, ' ': 1, Spacebar: 1 };
+  window.addEventListener('keydown', function (e) {
+    if (!GAME_KEYS[e.key] || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    var a = document.activeElement;
+    if (!a || a === document.body || a === document.documentElement) focusGame();
+  }, { passive: false });
+})();
+</script>
+</body>
+</html>

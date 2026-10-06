@@ -9,3 +9,6 @@ logs:
 push:
   projectId: 269268
   fileId: 2631369
+# Web needs glsl (GLSL ES 300, WebGL2 runtime) and wgsl (WebGPU runtimes). The
+# native backends stay on so the CLI preview keeps working.
+shaderOutputs: [glsl, wgsl, msl, hlsl, spirv]
