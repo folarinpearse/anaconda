@@ -24,6 +24,12 @@ return {
     VISION_FLOOR = 0.15,
     REVEAL_TIME = 1.5, -- seconds for the reveal to fade from 1 to 0
 
+    -- Endings
+    WIN_HOLD_TIME = 1.0, -- seconds the reveal is held full after the last guest is eaten, before "won"
+    OVERLAY_FADE_IN = 0.35, -- seconds for a screen overlay to fade in
+    OVERLAY_FADE_OUT = 0.2, -- ...and out
+    RESTART_LOCKOUT = 0.5, -- seconds after the game ends before a click or Space can restart it
+
     -- Cone shape in tiles / radians, from the floor's end to full vision.
     -- (Interpolated on `vision` itself, so the floor value sits a little above
     -- the minimum.)

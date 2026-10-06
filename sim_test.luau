@@ -204,7 +204,7 @@ return function(): Tests
                 expect(guest.gone).is(true)
                 expect(Sim.peopleLeft(sim)).is(0)
                 expect(sim.eaten).is(0)
-                expect(sim.state).is('playing') -- one escape is not a loss
+                expect(sim.state).is('won') -- one escape is not a loss, and nobody is left
                 expect(sawFlee).is(true)
                 -- Alert lasts half a second (30 frames at 60 fps).
                 expect(alertFrames).greaterThanOrEqual(28)
@@ -813,10 +813,12 @@ return function(): Tests
             end)
 
             test.case('eating restores vision and fires a reveal that fades in 1.5 seconds', function(expect)
+                -- A second guest, walled into its own pocket, keeps this from being
+                -- the last meal (the last one holds the reveal instead).
                 local sim = Sim.new({
-                    '#############',
-                    '#....SP.....#',
-                    '#############',
+                    '#################',
+                    '#....SP.....#.P.#',
+                    '#################',
                 }, 2)
                 Sim.start(sim)
                 sim.vision = 0.3
@@ -1016,6 +1018,190 @@ return function(): Tests
                 end
                 expect(run({ x = 8, y = 1 }, 1.5)).is(1) -- behind the wall
                 expect(run({ x = 8, y = 2 }, 2.5)).is(0) -- visible through the doorway
+            end)
+        end)
+
+        test.group('endings', function()
+            -- A playing 20x5 room with the snake on row 1 heading east. `doors` guests
+            -- (0 to 3) stand on row 3, each right above an exit in the south wall, and
+            -- `ahead` are the x positions of more guests on row 1 in the snake's path.
+            local function house(doors: number, ahead: { number }): Sim.Sim
+                local marks: { Mark } = { { x = 10, y = 1, ch = 'S' } }
+                for i = 1, doors do
+                    table.insert(marks, { x = 1 + i * 2, y = 4, ch = 'E' })
+                    table.insert(marks, { x = 1 + i * 2, y = 3, ch = 'P' })
+                end
+                for _, x in ahead do
+                    table.insert(marks, { x = x, y = 1, ch = 'P' })
+                end
+                local sim = Sim.new(room(20, 5, marks), 11)
+                Sim.start(sim)
+                return sim
+            end
+
+            -- Tells the first `n` guests standing by the exits to run, then steps the
+            -- guests once: each one is next to its door, so they are out in that step.
+            local function letOut(sim: Sim.Sim, n: number)
+                local told = 0
+                for _, g in sim.guests do
+                    if g.cell.y == 3 and told < n then
+                        g.state = 'flee'
+                        told += 1
+                    end
+                end
+                Sim.stepGuests(sim)
+            end
+
+            test.case('every guest eaten wins, after the reveal hold', function(expect)
+                local sim = Sim.new(room(16, 3, {
+                    { x = 5, y = 1, ch = 'S' },
+                    { x = 6, y = 1, ch = 'P' },
+                    { x = 7, y = 1, ch = 'P' },
+                    { x = 8, y = 1, ch = 'P' },
+                }), 12)
+                Sim.start(sim)
+                Sim.stepSnake(sim)
+                Sim.stepSnake(sim)
+                expect(sim.state).is('playing') -- one guest left
+                Sim.stepSnake(sim)
+                expect(sim.eaten).is(3)
+                expect(Sim.peopleLeft(sim)).is(0)
+                expect(sim.state).is('playing') -- the hold, not the win yet
+                expect(sim.clearing).is(true)
+                expect(sim.endReason).is('none')
+
+                -- Held: the reveal stays full and nothing moves.
+                local head = sim.cur[1]
+                local played = sim.playTime
+                frames(sim, 54)
+                expect(sim.state).is('playing')
+                expect(sim.reveal).is(1)
+                expect(sim.cur[1].x).is(head.x)
+                expect(sim.playTime).is(played)
+                expect(Sim.lunge(sim)).is(false)
+
+                frames(sim, 12)
+                expect(sim.state).is('won')
+                expect(sim.endReason).is('cleared')
+                expect(sim.clearing).is(false)
+                expect(sim.reveal).is(1) -- the cleared screen keeps the floor plan lit
+                expect(sim.escaped).is(0)
+            end)
+
+            test.case('two escaped and the rest eaten wins', function(expect)
+                local sim = house(2, { 12 })
+                letOut(sim, 2)
+                expect(sim.escaped).is(2)
+                expect(sim.state).is('playing') -- the guest on row 1 is still in
+                Sim.stepSnake(sim)
+                Sim.stepSnake(sim) -- the head enters (12, 1)
+                expect(sim.eaten).is(1)
+                expect(Sim.peopleLeft(sim)).is(0)
+                frames(sim, 66)
+                expect(sim.state).is('won')
+                expect(sim.endReason).is('cleared')
+                expect(sim.escaped).is(2)
+            end)
+
+            test.case('the last guest slipping out wins at once', function(expect)
+                local sim = house(1, { 12 })
+                Sim.stepSnake(sim)
+                Sim.stepSnake(sim) -- eats the guest on row 1
+                expect(sim.eaten).is(1)
+                expect(sim.state).is('playing') -- the guest by the first exit is still in
+                expect(sim.clearing).is(false)
+                letOut(sim, 1)
+                expect(sim.escaped).is(1)
+                expect(sim.state).is('won') -- no hold: nothing was eaten last
+                expect(sim.endReason).is('cleared')
+            end)
+
+            test.case('everyone escaping with fewer than three out is a win', function(expect)
+                local sim = house(2, {})
+                letOut(sim, 2)
+                expect(sim.escaped).is(2)
+                expect(sim.eaten).is(0)
+                expect(sim.state).is('won')
+                expect(sim.endReason).is('cleared')
+            end)
+
+            test.case('three escaped loses even with guests still inside', function(expect)
+                local sim = house(3, { 12, 14 })
+                letOut(sim, 3)
+                expect(sim.escaped).is(3)
+                expect(Sim.peopleLeft(sim)).is(2)
+                expect(sim.state).is('lost')
+                expect(sim.endReason).is('escaped')
+                expect(sim.hp).is(Config.MAX_HP)
+            end)
+
+            test.case('running out of HP loses', function(expect)
+                local sim = Sim.new(room(12, 9, { { x = 1, y = 1, ch = 'S' }, { x = 2, y = 7, ch = 'P' } }), 14)
+                Sim.start(sim)
+                sim.cur = { { x = 10, y = 4 }, { x = 9, y = 4 } }
+                for _ = 1, Config.MAX_HP do
+                    expect(sim.state).is('playing')
+                    sim.cur = { { x = 10, y = 4 }, { x = 9, y = 4 } }
+                    sim.prev = table.clone(sim.cur)
+                    sim.dir = Sim.RIGHT
+                    sim.invulnLeft = 0
+                    Sim.stepSnake(sim)
+                end
+                expect(sim.hp).is(0)
+                expect(Sim.peopleLeft(sim)).is(1) -- a guest is still inside
+                expect(sim.state).is('lost')
+                expect(sim.endReason).is('walls')
+            end)
+
+            test.case('the clock counts only while playing', function(expect)
+                local sim = arena(12, 9, { { x = 5, y = 4 }, { x = 4, y = 4 }, { x = 3, y = 4 } }, Sim.RIGHT)
+                sim.state = 'ready'
+                frames(sim, 60)
+                expect(sim.playTime).is(0)
+                Sim.start(sim)
+                frames(sim, 30)
+                expect(math.abs(sim.playTime - 0.5)).lessThan(0.001)
+                sim.state = 'lost'
+                frames(sim, 60)
+                expect(math.abs(sim.playTime - 0.5)).lessThan(0.001)
+            end)
+
+            test.case('a restart clears the ending, the clock and the hold', function(expect)
+                local sim = house(3, { 12, 14 })
+                frames(sim, 30)
+                letOut(sim, 3)
+                expect(sim.state).is('lost')
+                expect(sim.endReason).is('escaped')
+                expect(sim.playTime).greaterThan(0)
+
+                Sim.reset(sim, 'playing')
+                expect(sim.state).is('playing')
+                expect(sim.endReason).is('none')
+                expect(sim.playTime).is(0)
+                expect(sim.clearing).is(false)
+                expect(sim.escaped).is(0)
+                expect(sim.eaten).is(0)
+                expect(sim.score).is(0)
+                expect(sim.hp).is(Config.MAX_HP)
+                expect(Sim.peopleLeft(sim)).is(sim.total)
+                frames(sim, 30)
+                expect(sim.playTime).greaterThan(0.4)
+
+                -- A restart in the middle of the win hold drops the hold too.
+                local won = Sim.new(room(12, 3, {
+                    { x = 5, y = 1, ch = 'S' },
+                    { x = 6, y = 1, ch = 'P' },
+                }), 13)
+                Sim.start(won)
+                Sim.stepSnake(won)
+                expect(won.clearing).is(true)
+                Sim.reset(won, 'playing')
+                expect(won.clearing).is(false)
+                expect(won.clearLeft).is(0)
+                frames(won, 6) -- under a tick: the snake has not reached the guest again
+                expect(won.state).is('playing')
+                expect(won.endReason).is('none')
+                expect(won.clearing).is(false)
             end)
         end)
     end

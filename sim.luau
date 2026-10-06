@@ -22,6 +22,10 @@ export type Guest = {
     gone: boolean, -- eaten and finished shrinking, or escaped
 }
 
+-- Why the game ended: `cleared` is the win, `walls` (out of HP) and `escaped`
+-- (too many got out) are the losses.
+export type EndReason = 'none' | 'cleared' | 'walls' | 'escaped'
+
 export type Sim = {
     cols: number,
     rows: number,
@@ -55,6 +59,10 @@ export type Sim = {
 
     guests: { Guest },
     state: string, -- ready | playing | won | lost
+    endReason: EndReason,
+    playTime: number, -- seconds spent playing since reset; stops when the game does
+    clearing: boolean, -- last guest eaten: the reveal is held, then the game is won
+    clearLeft: number, -- seconds of that hold still to run
     score: number,
     eaten: number,
     escaped: number,
@@ -295,21 +303,43 @@ local function openNeighbors(sim: Sim, g: Guest, blocked: { [number]: boolean },
     return out
 end
 
-local function checkWinLose(sim: Sim)
-    if sim.state ~= 'playing' then
+local function finish(sim: Sim, state: string, reason: EndReason)
+    sim.state = state
+    sim.endReason = reason
+    sim.clearing = false
+end
+
+-- The game ends when the house empties or too many have got out. Lost = 3
+-- escaped (whoever is still inside) or no HP. Won = no guest left, eaten or
+-- escaped, with fewer than 3 escaped. `byEat` says the last guest went down the
+-- snake's throat: that win waits out a short hold so the reveal can light the
+-- whole floor plan; the last guest slipping out wins at once.
+local function checkWinLose(sim: Sim, byEat: boolean)
+    if sim.state ~= 'playing' or sim.clearing then
         return
     end
     if sim.escaped >= ESCAPE_LIMIT then
-        sim.state = 'lost'
-    elseif sim.total > 0 and sim.eaten >= sim.total then
-        sim.state = 'won'
+        finish(sim, 'lost', 'escaped')
+        return
+    end
+    for _, g in sim.guests do
+        if isActive(g) then
+            return
+        end
+    end
+    if byEat and Config.WIN_HOLD_TIME > 0 then
+        sim.clearing = true
+        sim.clearLeft = Config.WIN_HOLD_TIME
+        sim.reveal = 1
+    else
+        finish(sim, 'won', 'cleared')
     end
 end
 
 local function escape(sim: Sim, g: Guest)
     g.gone = true
     sim.escaped += 1
-    checkWinLose(sim)
+    checkWinLose(sim, false)
 end
 
 local function eat(sim: Sim, g: Guest)
@@ -320,7 +350,7 @@ local function eat(sim: Sim, g: Guest)
     sim.hp = math.min(Config.MAX_HP, sim.hp + Config.HEAL_PER_GUEST)
     sim.vision = 1
     sim.reveal = 1
-    checkWinLose(sim)
+    checkWinLose(sim, true)
 end
 
 local function moveGuest(g: Guest, to: Cell)
@@ -463,6 +493,10 @@ function Sim.reset(sim: Sim, state: string)
     sim.score = 0
     sim.eaten = 0
     sim.escaped = 0
+    sim.endReason = 'none'
+    sim.playTime = 0
+    sim.clearing = false
+    sim.clearLeft = 0
     sim.state = state
 end
 
@@ -520,6 +554,10 @@ function Sim.new(level: { string }, seed: number): Sim
         reveal = 0,
         guests = {},
         state = 'ready',
+        endReason = 'none',
+        playTime = 0,
+        clearing = false,
+        clearLeft = 0,
         score = 0,
         eaten = 0,
         escaped = 0,
@@ -601,7 +639,7 @@ local function hit(sim: Sim, x: number, y: number)
         sim.hitCell = { x = x, y = y }
         sim.hitTime = sim.time
         if sim.hp <= 0 then
-            sim.state = 'lost'
+            finish(sim, 'lost', 'walls')
             return
         end
     end
@@ -654,7 +692,7 @@ end
 -- Starts a lunge: the next LUNGE_STEPS moves run at LUNGE_MULTIPLIER x the tick
 -- rate. Refused outside play or during the cooldown.
 function Sim.lunge(sim: Sim): boolean
-    if sim.state ~= 'playing' or sim.cooldownLeft > 0 then
+    if sim.state ~= 'playing' or sim.clearing or sim.cooldownLeft > 0 then
         return false
     end
     sim.lungeLeft = Config.LUNGE_STEPS
@@ -717,11 +755,27 @@ function Sim.update(sim: Sim, dt: number)
             end
         end
     end
-    sim.reveal = math.max(0, sim.reveal - dt / Config.REVEAL_TIME)
+    -- The reveal fades after a meal, except on the last one: it is held full
+    -- through the win hold and on the cleared screen.
+    if sim.clearing or sim.state == 'won' then
+        sim.reveal = 1
+    else
+        sim.reveal = math.max(0, sim.reveal - dt / Config.REVEAL_TIME)
+    end
+    if sim.clearing then
+        -- Everything else is frozen while the floor plan is lit.
+        sim.time += dt
+        sim.clearLeft -= dt
+        if sim.clearLeft <= 0 then
+            finish(sim, 'won', 'cleared')
+        end
+        return
+    end
     if sim.state ~= 'playing' then
         sim.time += dt -- hit effects keep running on the end screen
         return
     end
+    sim.playTime += dt
     -- Hunger: vision drains toward the floor until the next meal.
     sim.vision = math.max(Config.VISION_FLOOR, sim.vision - dt * (1 - Config.VISION_FLOOR) / Config.VISION_DECAY_TIME)
     for _, g in sim.guests do
@@ -743,7 +797,7 @@ function Sim.update(sim: Sim, dt: number)
         sim.cooldownLeft = math.max(0, sim.cooldownLeft - d)
     end
     local remaining = dt
-    while remaining > 0 and sim.state == 'playing' do
+    while remaining > 0 and sim.state == 'playing' and not sim.clearing do
         local rate = if sim.lungeLeft > 0 then Config.LUNGE_MULTIPLIER else 1
         local need = math.max(0, TICK - sim.snakeAcc) / rate
         if remaining >= need then
@@ -762,7 +816,7 @@ function Sim.update(sim: Sim, dt: number)
     end
 
     sim.guestAcc += dt
-    while sim.guestAcc >= GUEST_TICK and sim.state == 'playing' do
+    while sim.guestAcc >= GUEST_TICK and sim.state == 'playing' and not sim.clearing do
         sim.guestAcc -= GUEST_TICK
         Sim.stepGuests(sim)
     end

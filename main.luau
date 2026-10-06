@@ -35,6 +35,8 @@ type Game = {
     context: Context?,
 
     -- presentation clocks and state
+    sinceEnd: number, -- seconds on an end screen: restart is locked out at first
+    fades: { [string]: number }, -- 0-1 opacity of each screen overlay, by SCREENS name
     elapsed: number,
     beatPhase: number, -- 0-1 through the current heartbeat
     dirAngle: number, -- smoothed facing of the head, radians
@@ -66,6 +68,11 @@ type Game = {
     boostReady: Property<boolean>?,
     boostCooldown: Property<number>?,
     gameState: PropertyEnum?,
+    endReason: PropertyEnum?,
+    eaten: Property<number>?,
+    elapsedTime: Property<number>?,
+    timeText: Property<string>?, -- elapsedTime as m:ss, for the end screens
+    fadeProps: { [string]: Property<number> }, -- by SCREENS name, plus 'end' and 'dim'
 }
 
 local TILE = 40
@@ -88,6 +95,20 @@ local BACKGROUND = Color.rgb(20, 23, 28) -- the artboard fill, behind the letter
 local UNIFORM_SIZE = 96 -- bytes; the Uniforms struct in vision.wgsl
 local TURN_SPEED = 14 -- how fast the cone swings round to a new heading, per second
 local PI = math.pi
+
+-- The screen overlays in scene.rml. Each is shown while the game is not playing,
+-- the first for `ready` and the rest for the end reasons of the same name.
+local SCREENS = { 'ready', 'cleared', 'walls', 'escaped' }
+-- The view model's number property for each overlay's opacity. 'end' is the
+-- shared stats block under the three end screens, 'dim' the scrim over the board.
+local FADE_PROPS: { [string]: string } = {
+    ready = 'readyAlpha',
+    cleared = 'clearedAlpha',
+    walls = 'wallsAlpha',
+    escaped = 'escapedAlpha',
+    ['end'] = 'endAlpha',
+    dim = 'dimAlpha',
+}
 
 local function addRect(path: Path, x: number, y: number)
     -- Same winding for every rect so they can share one path.
@@ -150,6 +171,64 @@ local function publish(self: Game)
     if gameState ~= nil and gameState.value ~= sim.state then
         gameState.value = sim.state
     end
+    local endReason = self.endReason
+    if endReason ~= nil and endReason.value ~= sim.endReason then
+        endReason.value = sim.endReason
+    end
+    local eaten = self.eaten
+    if eaten ~= nil and eaten.value ~= sim.eaten then
+        eaten.value = sim.eaten
+    end
+    local elapsedTime = self.elapsedTime
+    if elapsedTime ~= nil and elapsedTime.value ~= sim.playTime then
+        elapsedTime.value = sim.playTime
+    end
+    local timeText = self.timeText
+    if timeText ~= nil then
+        local seconds = math.floor(sim.playTime)
+        local text = string.format('%d:%02d', seconds // 60, seconds % 60)
+        if timeText.value ~= text then
+            timeText.value = text
+        end
+    end
+end
+
+-- Which overlay the game is showing, if any.
+local function screenOf(sim: Sim.Sim): string?
+    if sim.state == 'ready' then
+        return 'ready'
+    elseif (sim.state == 'won' or sim.state == 'lost') and sim.endReason ~= 'none' then
+        return sim.endReason
+    end
+    return nil
+end
+
+-- Fades each overlay toward 1 (the one on show) or 0 (the rest), and mirrors the
+-- opacities into the view model for scene.rml to bind to.
+local function stepFades(self: Game, seconds: number)
+    local active = screenOf(self.sim)
+    local shown = 0.0
+    local ending = 0.0
+    for _, name in SCREENS do
+        local v = self.fades[name]
+        if name == active then
+            v = math.min(1, v + seconds / Config.OVERLAY_FADE_IN)
+        else
+            v = math.max(0, v - seconds / Config.OVERLAY_FADE_OUT)
+        end
+        self.fades[name] = v
+        shown = math.max(shown, v)
+        if name ~= 'ready' then
+            ending = math.max(ending, v)
+        end
+    end
+    self.fades['end'] = ending
+    self.fades.dim = shown
+    for name, prop in self.fadeProps do
+        if prop.value ~= self.fades[name] then
+            prop.value = self.fades[name]
+        end
+    end
 end
 
 -- One Person artboard instance per live guest, each with its own view model.
@@ -174,9 +253,25 @@ local function syncPeople(self: Game, seconds: number)
     end
 end
 
+-- A fresh game, straight into play. The sim resets the score, health, clock
+-- and ending; this clears what main keeps on top of that.
 local function restart(self: Game)
     self.people = {}
     Sim.reset(self.sim, 'playing')
+    self.rings = Fog.newRings()
+    self.dirAngle = 0 -- the snake starts facing right
+    self.beatPhase = 0
+    self.sinceEnd = 0
+    publish(self)
+end
+
+-- A click or Space on an end screen starts the next game, but not in the first
+-- moments after the game ends: a press meant for the last lunge must not skip
+-- the result.
+local function restartIfAllowed(self: Game)
+    if self.sinceEnd >= Config.RESTART_LOCKOUT then
+        restart(self)
+    end
 end
 
 function init(self: Game, context: Context): boolean
@@ -195,6 +290,16 @@ function init(self: Game, context: Context): boolean
     self.boostReady = vm:getBoolean('boostReady')
     self.boostCooldown = vm:getNumber('boostCooldown')
     self.gameState = vm:getEnum('gameState')
+    self.endReason = vm:getEnum('endReason')
+    self.eaten = vm:getNumber('eaten')
+    self.elapsedTime = vm:getNumber('elapsedTime')
+    self.timeText = vm:getString('timeText')
+    for name, key in FADE_PROPS do
+        local prop = vm:getNumber(key)
+        if prop ~= nil then
+            self.fadeProps[name] = prop
+        end
+    end
     publish(self)
     return true
 end
@@ -218,7 +323,7 @@ function keyboardEvent(self: Game, event: KeyboardEvent): boolean
             Sim.start(sim)
             return true
         elseif sim.state == 'won' or sim.state == 'lost' then
-            restart(self)
+            restartIfAllowed(self)
             return true
         end
         Sim.lunge(sim) -- during play, Space is the boost
@@ -235,9 +340,9 @@ function keyboardEvent(self: Game, event: KeyboardEvent): boolean
     return false
 end
 
--- A click or tap starts a game that is waiting, same as Space, and lunges
--- during play. Focus for the keys is requested by the state machine's pointer
--- listener in scene.rml.
+-- A click or tap starts a game that is waiting, same as Space, lunges during
+-- play and starts a new game from an end screen. Focus for the keys is
+-- requested by the state machine's pointer listener in scene.rml.
 function pointerDown(self: Game, event: PointerEvent)
     local sim = self.sim
     if sim.state == 'ready' then
@@ -245,6 +350,9 @@ function pointerDown(self: Game, event: PointerEvent)
         event:hit()
     elseif sim.state == 'playing' then
         Sim.lunge(sim)
+        event:hit()
+    elseif sim.state == 'won' or sim.state == 'lost' then
+        restartIfAllowed(self)
         event:hit()
     end
 end
@@ -276,12 +384,25 @@ end
 function advance(self: Game, seconds: number): boolean
     local sim = self.sim
     Sim.update(sim, seconds)
-    syncPeople(self, seconds)
+
+    -- Under a screen overlay the game is frozen: the guests stop mid-pose and the
+    -- clocks that drive the shader and heartbeat stand still. (The win hold is
+    -- still the game: the last guest finishes being eaten and the floor lights up.)
+    local live = sim.state == 'playing'
+    local liveSeconds = if live then seconds else 0
+    syncPeople(self, liveSeconds)
     publish(self)
 
+    if sim.state == 'won' or sim.state == 'lost' then
+        self.sinceEnd += seconds
+    else
+        self.sinceEnd = 0
+    end
+    stepFades(self, seconds)
+
     -- Presentation clocks.
-    self.elapsed += seconds
-    self.beatPhase = (self.beatPhase + seconds * Fog.beatRate(sim.vision)) % 1
+    self.elapsed += liveSeconds
+    self.beatPhase = (self.beatPhase + liveSeconds * Fog.beatRate(sim.vision)) % 1
 
     -- Swing the cone round to the new heading rather than snapping.
     local target = math.atan2(sim.dir.y, sim.dir.x)
@@ -604,6 +725,8 @@ return function(context: Context): Layout<Game>
         scale = 1,
         context = nil,
 
+        sinceEnd = 0,
+        fades = { ready = 0, cleared = 0, walls = 0, escaped = 0, ['end'] = 0, dim = 0 },
         elapsed = 0,
         beatPhase = 0,
         dirAngle = 0, -- the snake starts facing right
@@ -631,6 +754,11 @@ return function(context: Context): Layout<Game>
         boostReady = nil,
         boostCooldown = nil,
         gameState = nil,
+        endReason = nil,
+        eaten = nil,
+        elapsedTime = nil,
+        timeText = nil,
+        fadeProps = {},
 
         init = init,
         resize = resize,
