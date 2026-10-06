@@ -1,6 +1,7 @@
 -- Headless tests for the Anaconda rules. Run with `rive . --test`.
 local Sim = require('sim')
 local Config = require('config')
+local Fog = require('fog')
 local Level = require('level')
 
 type Mark = { x: number, y: number, ch: string }
@@ -774,6 +775,180 @@ return function(): Tests
                 local sim = Sim.new(room(12, 9, { { x = 5, y = 4, ch = 'S' } }), 1)
                 expect(Sim.lunge(sim)).is(false) -- still on the title screen
                 expect(sim.vision).is(1)
+            end)
+        end)
+
+        test.group('vision', function()
+            -- Keeps the snake away from walls while time passes.
+            local function hold(sim: Sim.Sim)
+                sim.cur = { { x = 20, y = 2 }, { x = 19, y = 2 } }
+                sim.prev = table.clone(sim.cur)
+                sim.dir = Sim.RIGHT
+                sim.turns = {}
+            end
+            local function age(sim: Sim.Sim, nframes: number)
+                for _ = 1, nframes do
+                    hold(sim)
+                    Sim.update(sim, 1 / 60)
+                end
+            end
+
+            test.case('vision decays from 1 to the floor over about 25 seconds', function(expect)
+                local sim = arena(40, 5, { { x = 20, y = 2 }, { x = 19, y = 2 } }, Sim.RIGHT)
+                expect(sim.vision).is(1)
+                age(sim, 750) -- 12.5 s: halfway
+                expect(sim.vision).greaterThan(0.55)
+                expect(sim.vision).lessThan(0.60)
+                age(sim, 760) -- 25.2 s
+                expect(sim.vision).lessThan(0.16)
+                expect(sim.vision).greaterThanOrEqual(Config.VISION_FLOOR)
+                age(sim, 600) -- and it stays there
+                expect(sim.vision).is(Config.VISION_FLOOR)
+            end)
+
+            test.case('vision does not decay before the game starts', function(expect)
+                local sim = Sim.new(room(12, 9, { { x = 5, y = 4, ch = 'S' } }), 1)
+                frames(sim, 600)
+                expect(sim.vision).is(1)
+            end)
+
+            test.case('eating restores vision and fires a reveal that fades in 1.5 seconds', function(expect)
+                local sim = Sim.new({
+                    '#############',
+                    '#....SP.....#',
+                    '#############',
+                }, 2)
+                Sim.start(sim)
+                sim.vision = 0.3
+                expect(sim.reveal).is(0)
+                Sim.stepSnake(sim)
+                expect(sim.eaten).is(1)
+                expect(sim.vision).is(1)
+                expect(sim.reveal).is(1)
+                frames(sim, 45) -- 0.75 s
+                expect(sim.reveal).greaterThan(0.45)
+                expect(sim.reveal).lessThan(0.55)
+                frames(sim, 50) -- past 1.5 s
+                expect(sim.reveal).is(0)
+            end)
+
+            test.case('a lunge still costs vision, but never below the floor', function(expect)
+                local sim = arena(40, 5, { { x = 20, y = 2 }, { x = 19, y = 2 } }, Sim.RIGHT)
+                sim.vision = Config.VISION_FLOOR + 0.04
+                Sim.lunge(sim)
+                expect(sim.vision).is(Config.VISION_FLOOR)
+            end)
+        end)
+
+        test.group('fog and dread', function()
+            local FLOOR = Config.VISION_FLOOR
+
+            test.case('the cone is lit ahead of the head and dark behind it', function(expect)
+                -- Head at (10.5, 10.5) facing east.
+                expect(Fog.light(10.5, 10.5, 1, 0, 1, 15.5, 10.5)).greaterThan(0.9)
+                expect(Fog.light(10.5, 10.5, 1, 0, 1, 15.5, 13.5)).greaterThan(0.2) -- off to one side, inside
+                expect(Fog.light(10.5, 10.5, 1, 0, 1, 5.5, 10.5)).lessThan(0.05) -- behind
+                expect(Fog.light(10.5, 10.5, 1, 0, 1, 10.5, 16.5)).lessThan(0.05) -- off to the side, outside
+            end)
+
+            test.case('the cone grows with vision', function(expect)
+                expect(Fog.coneLength(1)).greaterThan(Fog.coneLength(FLOOR))
+                expect(Fog.coneHalfAngle(1)).greaterThan(Fog.coneHalfAngle(FLOOR))
+                -- 8 tiles ahead is lit at full vision and dark at minimum vision.
+                expect(Fog.light(10.5, 10.5, 1, 0, 1, 18.5, 10.5)).greaterThan(0.5)
+                expect(Fog.light(10.5, 10.5, 1, 0, FLOOR, 18.5, 10.5)).lessThan(0.01)
+            end)
+
+            test.case('a faint tile around the head stays visible at minimum vision', function(expect)
+                -- Behind the head, well outside the cone, but within a tile.
+                local behind = Fog.light(10.5, 10.5, 1, 0, FLOOR, 9.9, 10.5)
+                expect(behind).greaterThan(0.25)
+                expect(behind).lessThan(0.5) -- faint, not full light
+                expect(Fog.light(10.5, 10.5, 1, 0, FLOOR, 8.0, 10.5)).lessThan(0.01)
+            end)
+
+            test.case('a reveal puts everything in view', function(expect)
+                expect(Fog.inView(10.5, 10.5, 1, 0, FLOOR, 0, 2.5, 2.5)).is(false)
+                expect(Fog.inView(10.5, 10.5, 1, 0, FLOOR, 0.6, 2.5, 2.5)).is(true)
+            end)
+
+            test.case('the heartbeat is slow at full vision and fast near minimum', function(expect)
+                expect(Fog.beatRate(1)).is(Config.HEARTBEAT_SLOW)
+                expect(Fog.beatRate(FLOOR)).is(Config.HEARTBEAT_FAST)
+                expect(Fog.beatRate(0.5)).greaterThan(Config.HEARTBEAT_SLOW)
+                expect(Fog.beatRate(0.5)).lessThan(Config.HEARTBEAT_FAST)
+                expect(Fog.beatRate(0.3)).greaterThan(Fog.beatRate(0.6))
+            end)
+
+            test.case('the heartbeat pulse thumps then rests', function(expect)
+                expect(Fog.heartbeat(0.05)).greaterThan(0.9) -- lub
+                expect(Fog.heartbeat(0.3)).greaterThan(0.6) -- dub
+                expect(Fog.heartbeat(0.7)).lessThan(0.05) -- rest
+                for i = 0, 20 do
+                    local h = Fog.heartbeat(i / 20)
+                    expect(h).greaterThanOrEqual(0)
+                    expect(h).lessThanOrEqual(1)
+                end
+            end)
+        end)
+
+        test.group('sound rings', function()
+            local function guest(id: number, state: string): any
+                return { id = id, cell = { x = 3, y = 3 }, state = state, gone = false }
+            end
+            local function never(_: any): boolean
+                return false
+            end
+            local function always(_: any): boolean
+                return true
+            end
+
+            -- Runs 60 fps for `seconds` and counts the frames that start a ring.
+            local function emissions(guests: { any }, visible: (any) -> boolean, seconds: number): (number, Fog.Rings)
+                local rings = Fog.newRings()
+                local count = 0
+                for _ = 1, math.floor(seconds * 60) do
+                    Fog.stepRings(rings, guests, visible, 1 / 60)
+                    for _, r in rings.list do
+                        if r.age == 0 then
+                            count += 1
+                        end
+                    end
+                end
+                return count, rings
+            end
+
+            test.case('an unseen alerted guest rings about once per second', function(expect)
+                local n, rings = emissions({ guest(1, 'alert') }, never, 3.1)
+                expect(n).is(4) -- at 0, 1, 2 and 3 s
+                expect(rings.list[1].x).is(3.5) -- on the centre of the guest tile
+                expect(rings.list[1].y).is(3.5)
+            end)
+
+            test.case('a fleeing guest rings too, marked as fleeing', function(expect)
+                local n, rings = emissions({ guest(1, 'flee') }, never, 0.5)
+                expect(n).is(1)
+                expect(rings.list[1].flee).is(true)
+            end)
+
+            test.case('guests in view, idle, wandering or gone make no ring', function(expect)
+                local inView = emissions({ guest(1, 'alert') }, always, 3)
+                expect(inView).is(0)
+                local quiet = emissions({ guest(1, 'idle'), guest(2, 'wander'), guest(3, 'caught') }, never, 3)
+                expect(quiet).is(0)
+                local gone = guest(1, 'flee')
+                gone.gone = true
+                local escaped = emissions({ gone }, never, 3)
+                expect(escaped).is(0)
+            end)
+
+            test.case('a ring expires after its lifetime', function(expect)
+                local _, rings = emissions({ guest(1, 'alert') }, never, 0.1)
+                expect(#rings.list).is(1)
+                for _ = 1, math.floor((Config.RING_LIFETIME + 0.1) * 60) do
+                    Fog.stepRings(rings, {}, never, 1 / 60)
+                end
+                expect(#rings.list).is(0)
             end)
         end)
     end

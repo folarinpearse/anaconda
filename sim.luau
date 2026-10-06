@@ -50,7 +50,8 @@ export type Sim = {
     -- lunge
     lungeLeft: number, -- boosted moves still to make
     cooldownLeft: number,
-    vision: number, -- 0-1; each lunge costs some
+    vision: number, -- VISION_FLOOR to 1: decays without eating, a lunge costs some
+    reveal: number, -- 1 to 0 after eating: lifts the darkness map-wide
 
     guests: { Guest },
     state: string, -- ready | playing | won | lost
@@ -316,6 +317,8 @@ local function eat(sim: Sim, g: Guest)
     sim.eaten += 1
     sim.score += SCORE_PER_GUEST
     sim.hp = math.min(Config.MAX_HP, sim.hp + Config.HEAL_PER_GUEST)
+    sim.vision = 1
+    sim.reveal = 1
     checkWinLose(sim)
 end
 
@@ -450,6 +453,7 @@ function Sim.reset(sim: Sim, state: string)
     sim.lungeLeft = 0
     sim.cooldownLeft = 0
     sim.vision = 1
+    sim.reveal = 0
     sim.guests = {}
     for i, s in sim.spawns do
         table.insert(sim.guests, newGuest(sim, i, { x = s.x, y = s.y }))
@@ -512,6 +516,7 @@ function Sim.new(level: { string }, seed: number): Sim
         lungeLeft = 0,
         cooldownLeft = 0,
         vision = 1,
+        reveal = 0,
         guests = {},
         state = 'ready',
         score = 0,
@@ -653,7 +658,7 @@ function Sim.lunge(sim: Sim): boolean
     end
     sim.lungeLeft = Config.LUNGE_STEPS
     sim.cooldownLeft = Config.LUNGE_COOLDOWN
-    sim.vision = math.max(0, sim.vision - Config.LUNGE_VISION_COST)
+    sim.vision = math.max(Config.VISION_FLOOR, sim.vision - Config.LUNGE_VISION_COST)
     return true
 end
 
@@ -711,10 +716,13 @@ function Sim.update(sim: Sim, dt: number)
             end
         end
     end
+    sim.reveal = math.max(0, sim.reveal - dt / Config.REVEAL_TIME)
     if sim.state ~= 'playing' then
         sim.time += dt -- hit effects keep running on the end screen
         return
     end
+    -- Hunger: vision drains toward the floor until the next meal.
+    sim.vision = math.max(Config.VISION_FLOOR, sim.vision - dt * (1 - Config.VISION_FLOOR) / Config.VISION_DECAY_TIME)
     for _, g in sim.guests do
         if g.state == 'alert' and not g.gone then
             g.alertLeft -= dt

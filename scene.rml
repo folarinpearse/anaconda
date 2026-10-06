@@ -58,7 +58,7 @@
         <!-- Health and boost, in the bottom wall band (y 920-960). Placeholder
              look: a groove and a bound fill per bar. The rectangle's width is
              what is bound, so each converter's output range must match the
-             groove width (200). Each fill is declared before its groove: the
+             groove width (120 for HP and vision, 200 for boost). Each fill is declared before its groove: the
              first sibling is drawn on top. -->
         <Text x="48" y="940" originX="0" originY="0.5" sizingValue="autoWidth" name="HP Label" id="0:600">
             <TextStylePaint fontSize="16" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:601">
@@ -67,16 +67,35 @@
             <TextValueRun styleId="0:601" text="HP" name="Label" id="0:604"/>
         </Text>
         <Shape x="84" y="940" name="HP Fill" id="0:615">
-            <Rectangle width="200" height="12" originX="0" originY="0.5"
+            <Rectangle width="120" height="12" originX="0" originY="0.5"
                        cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" name="Path" id="0:616">
                 <DataBindContext sourcePathIds="0:100-0:650" propertyKey="20" converterId="0:640" id="0:617"/>
             </Rectangle>
             <Fill name="Fill" id="0:618"><SolidColor colorValue="FFE53935" name="Color" id="0:619"/></Fill>
         </Shape>
         <Shape x="84" y="940" name="HP Track" id="0:610">
-            <Rectangle width="200" height="12" originX="0" originY="0.5"
+            <Rectangle width="120" height="12" originX="0" originY="0.5"
                        cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" name="Path" id="0:611"/>
             <Fill name="Fill" id="0:612"><SolidColor colorValue="FF2A2F3A" name="Color" id="0:613"/></Fill>
+        </Shape>
+
+        <Text x="232" y="940" originX="0" originY="0.5" sizingValue="autoWidth" name="Vision Label" id="0:670">
+            <TextStylePaint fontSize="16" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:671">
+                <Fill name="Fill" id="0:672"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:673"/></Fill>
+            </TextStylePaint>
+            <TextValueRun styleId="0:671" text="VISION" name="Label" id="0:674"/>
+        </Text>
+        <Shape x="298" y="940" name="Vision Fill" id="0:675">
+            <Rectangle width="120" height="12" originX="0" originY="0.5"
+                       cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" name="Path" id="0:676">
+                <DataBindContext sourcePathIds="0:100-0:651" propertyKey="20" converterId="0:642" id="0:677"/>
+            </Rectangle>
+            <Fill name="Fill" id="0:678"><SolidColor colorValue="FF80CBC4" name="Color" id="0:679"/></Fill>
+        </Shape>
+        <Shape x="298" y="940" name="Vision Track" id="0:680">
+            <Rectangle width="120" height="12" originX="0" originY="0.5"
+                       cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" name="Path" id="0:681"/>
+            <Fill name="Fill" id="0:682"><SolidColor colorValue="FF2A2F3A" name="Color" id="0:683"/></Fill>
         </Shape>
 
         <Text x="640" y="940" originX="0" originY="0.5" sizingValue="autoWidth" name="Boost Label" id="0:620">
@@ -141,15 +160,19 @@
     <!-- Modules register in document order: sim before whatever requires it. -->
     <ScriptAsset file="config.luau" isModule="true" name="config" id="0:84"/>
     <ScriptAsset file="level.luau" isModule="true" name="level" id="0:83"/>
+    <ScriptAsset file="fog.luau" isModule="true" name="fog" id="0:85"/>
     <ScriptAsset file="sim.luau" isModule="true" name="sim" id="0:81"/>
     <ScriptAsset file="sim_test.luau" name="sim_test" id="0:82"/>
     <ScriptAsset file="main.luau" name="main" id="0:80"/>
 
     <DataConverterToString decimals="0" round="true" name="To Text" id="0:120"/>
 
-    <!-- HP (0 to MAX_HP in config.luau) onto the 200px groove. -->
-    <DataConverterRangeMapper minInput="0" maxInput="5" minOutput="0" maxOutput="200"
+    <!-- HP (0 to MAX_HP in config.luau) onto the 120px groove. -->
+    <DataConverterRangeMapper minInput="0" maxInput="5" minOutput="0" maxOutput="120"
                               clampLower="true" clampUpper="true" name="HP To Width" id="0:640"/>
+    <!-- vision (0 to 1) onto the 120px groove. -->
+    <DataConverterRangeMapper minInput="0" maxInput="1" minOutput="0" maxOutput="120"
+                              clampLower="true" clampUpper="true" name="Vision To Width" id="0:642"/>
     <!-- boostCooldown is 1 just after a lunge and 0 when ready: the fill grows
          as the boost recharges, full = ready. -->
     <DataConverterRangeMapper minInput="0" maxInput="1" minOutput="200" maxOutput="0"
