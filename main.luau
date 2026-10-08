@@ -21,11 +21,9 @@ type Game = {
     person: Input<Artboard<Data.Person>>,
     sim: Sim.Sim,
     people: { [number]: PersonRec },
-    floorPath: Path,
-    wallPath: Path,
+    floorImage: Image?, -- art/floor_base.png: the floor plan with walls and lighting baked in
+    wallsImage: Image?, -- art/walls_overlay.png: the walls alone, drawn above the guests
     exitPath: Path,
-    floorPaint: Paint,
-    wallPaint: Paint,
     exitPaint: Paint,
     bodyPaint: Paint,
     headPaint: Paint,
@@ -76,8 +74,8 @@ type Game = {
 }
 
 local TILE = 40
-local BODY_WIDTH = 24
-local HEAD_RADIUS = 16
+local BODY_WIDTH = 30
+local HEAD_RADIUS = 19
 local KAPPA = 0.5522847498
 local PERSON_SIZE = 32
 
@@ -277,6 +275,12 @@ end
 function init(self: Game, context: Context): boolean
     -- init runs twice and the view model is absent on the first call.
     self.context = context
+    -- Looked up by name, which nothing validates: a typo is nil, not a build error.
+    self.floorImage = context:image('floor_base')
+    self.wallsImage = context:image('walls_overlay')
+    if self.floorImage == nil or self.wallsImage == nil then
+        print('playfield art not found: floor_base / walls_overlay')
+    end
     local vm = context:viewModel()
     if vm == nil then
         return true
@@ -547,11 +551,16 @@ local function writeUniforms(self: Game, ox: number, oy: number, pxPerTile: numb
     ;(self.ubo :: GPUBuffer):write(b)
 end
 
--- The part of the world the shader darkens: floor plan, walls, exits, guests.
+-- The part of the world the shader darkens: floor plan, exits, guests, then the
+-- walls over them. Both images are one pixel per world unit (960 = 24 x TILE), so
+-- drawn at the origin they line up with the tiles. The art is for looks only:
+-- collision and vision occlusion still come from the level data.
 local function drawWorld(self: Game, r: Renderer)
     local sim = self.sim
-    r:drawPath(self.floorPath, self.floorPaint)
-    r:drawPath(self.wallPath, self.wallPaint)
+    local floorImage = self.floorImage
+    if floorImage ~= nil then
+        r:drawImage(floorImage, self.imageSampler, 'srcOver', 1)
+    end
     r:drawPath(self.exitPath, self.exitPaint)
 
     local guestAlpha = guestAlphaOf(sim)
@@ -564,6 +573,11 @@ local function drawWorld(self: Game, r: Renderer)
             rec.instance:draw(r)
             r:restore()
         end
+    end
+
+    local wallsImage = self.wallsImage
+    if wallsImage ~= nil then
+        r:drawImage(wallsImage, self.imageSampler, 'srcOver', 1)
     end
 end
 
@@ -679,20 +693,11 @@ return function(context: Context): Layout<Game>
     local sim = Sim.new(LEVEL, 20240607)
 
     -- Static level geometry: built once here, drawn every frame, never mutated.
-    local floorPath = Path.new()
-    local wallPath = Path.new()
-    local maskPath = Path.new() -- same tiles, from the level data alone: see drawMask
+    local maskPath = Path.new() -- wall tiles, from the level data alone: see drawMask
     local exitPath = Path.new()
-    local world = TILE * sim.cols
-    floorPath:moveTo(Vector.xy(0, 0))
-    floorPath:lineTo(Vector.xy(world, 0))
-    floorPath:lineTo(Vector.xy(world, world))
-    floorPath:lineTo(Vector.xy(0, world))
-    floorPath:close()
     for y = 0, sim.rows - 1 do
         for x = 0, sim.cols - 1 do
             if sim.walls[y + 1][x + 1] then
-                addRect(wallPath, x * TILE, y * TILE)
                 addRect(maskPath, x * TILE, y * TILE)
             elseif sim.exitTile[y + 1][x + 1] then
                 addRect(exitPath, x * TILE, y * TILE)
@@ -704,13 +709,11 @@ return function(context: Context): Layout<Game>
         person = late(),
         sim = sim,
         people = {},
-        floorPath = floorPath,
-        wallPath = wallPath,
+        floorImage = nil,
+        wallsImage = nil,
         maskPath = maskPath,
         maskPaint = Paint.with({ style = 'fill', color = Color.rgb(255, 255, 255) }),
         exitPath = exitPath,
-        floorPaint = Paint.with({ style = 'fill', color = Color.rgb(27, 31, 38) }),
-        wallPaint = Paint.with({ style = 'fill', color = Color.rgb(110, 116, 124) }),
         exitPaint = Paint.with({ style = 'fill', color = Color.rgb(229, 57, 53) }),
         bodyPaint = Paint.with({
             style = 'stroke',

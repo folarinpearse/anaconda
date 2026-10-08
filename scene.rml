@@ -298,6 +298,10 @@
     </Artboard>
 
     <FontAsset file="Inter.ttf" name="Inter" id="0:90"/>
+    <!-- Pre-rendered playfield, 960x960 at 40 px per tile. main.luau looks them up
+         by name; nothing in this markup references them. -->
+    <ImageAsset file="Art/floor_base.png" name="floor_base" id="0:910"/>
+    <ImageAsset file="Art/walls_overlay.png" name="walls_overlay" id="0:911"/>
     <!-- Modules register in document order: sim before whatever requires it. -->
     <ScriptAsset file="config.luau" isModule="true" name="config" id="0:84"/>
     <ScriptAsset file="level.luau" isModule="true" name="level" id="0:83"/>
