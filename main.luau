@@ -17,17 +17,32 @@ type PersonRec = {
     state: Sim.GuestState,
 }
 
+-- The values of the SnakeHead artboard's `state` enum (snakehead.rml).
+type HeadState = 'idle' | 'lunge' | 'eat' | 'hit'
+
+-- One coat of the body: the stroke that runs down the straight part and the
+-- fill that draws the tapered tail in the same colour.
+type BodyLayer = {
+    stroke: Paint,
+    fill: Paint,
+}
+
 type Game = {
     person: Input<Artboard<Data.Person>>,
+    snakeHead: Input<Artboard<Data.SnakeHead>>,
     sim: Sim.Sim,
     people: { [number]: PersonRec },
+    head: Artboard<Data.SnakeHead>?, -- the one SnakeHead instance, made on the first advance
+    headState: HeadState, -- the state last written to it
     floorImage: Image?, -- art/floor_base.png: the floor plan with walls and lighting baked in
     wallsImage: Image?, -- art/walls_overlay.png: the walls alone, drawn above the guests
     exitPath: Path,
     exitPaint: Paint,
-    bodyPaint: Paint,
-    headPaint: Paint,
-    flashPaint: Paint,
+    shadowPaint: Paint,
+    outlineLayer: BodyLayer,
+    bodyLayer: BodyLayer,
+    spineLayer: BodyLayer,
+    spotPaint: Paint,
     size: Vector,
     scale: number,
     context: Context?,
@@ -37,7 +52,13 @@ type Game = {
     fades: { [string]: number }, -- 0-1 opacity of each screen overlay, by SCREENS name
     elapsed: number,
     beatPhase: number, -- 0-1 through the current heartbeat
-    dirAngle: number, -- smoothed facing of the head, radians
+    dirAngle: number, -- smoothed facing of the vision cone, radians
+    faceAngle: number, -- where the drawn head points, radians: swings round across a tick
+    turnFrom: number, -- the facing the current swing started from
+    turnTo: number, -- ...and the heading it is swinging to
+    lastDir: Cell, -- the sim.dir last looked at, to spot a turn
+    seenEaten: number, -- the sim.eaten last looked at, to spot a meal
+    eatUntil: number, -- sim.time until which the head shows its eat animation
     seenBump: number, -- the sim.bumpTime last looked at, to spot a new bump
     nudgeDistance: number, -- px the head leans on the current bump; 0 = no nudge
     rings: Fog.Rings,
@@ -77,9 +98,30 @@ type Game = {
 
 local TILE = 40
 local BODY_WIDTH = 30
-local HEAD_RADIUS = 19
 local KAPPA = 0.5522847498
 local PERSON_SIZE = 32
+
+-- The SnakeHead artboard is 48x48, faces +x and is rigged at the neck joint;
+-- keep these in step with the `Rig` node in snakehead.rml.
+local HEAD_NECK_X = 12
+local HEAD_NECK_Y = 24
+local EAT_TIME = 0.25 -- seconds the head shows its eat animation after a meal
+local TURN_FRACTION = 0.6 -- share of a tick the head takes to swing round to a new heading
+
+-- The body: lit from straight above, so every coat runs down the middle.
+local SHADOW_DX = 3
+local SHADOW_DY = 4
+local SHADOW_ALPHA = 89 -- 35% of 255
+local SHADOW_FEATHER = 3 -- px of blur on the shadow's edge
+local OUTLINE_GROW = 4 -- the outline stroke is this much wider than the body
+local SPINE_FRACTION = 0.35 -- the highlight's width as a share of the body's
+local TAIL_SEGMENTS = 3 -- how many segments at the end taper to a point
+local SPOT_SPACING = TILE -- arc length between spots; must divide TILE so the pattern rides the body
+local SPOT_FIRST = 24 -- arc length from the neck to the first spot at the start of a tick
+local SPOT_ALONG = 7 -- half the spot's length, along the body
+local SPOT_ACROSS = 9 -- half its width, across the body
+local SPOT_GROW_FROM = 8 -- spots swell from nothing between these two arc lengths from the neck,
+local SPOT_GROW_LEN = 14 -- so they appear from under the head instead of popping in
 
 -- GLFW key codes -> direction.
 local KEY_DIRS: { [number]: Cell } = {
@@ -133,6 +175,33 @@ local function addCircle(path: Path, cx: number, cy: number, r: number)
     path:cubicTo(Vector.xy(cx - r, cy - k), Vector.xy(cx - k, cy - r), Vector.xy(cx, cy - r))
     path:cubicTo(Vector.xy(cx + k, cy - r), Vector.xy(cx + r, cy - k), Vector.xy(cx + r, cy))
     path:close()
+end
+
+-- An oval at (cx, cy) with half-axes `along` x `across`, its long axis turned
+-- to the unit direction (tx, ty). Wound the same way as addCircle, so several
+-- can share one path.
+local function addOval(path: Path, cx: number, cy: number, tx: number, ty: number, along: number, across: number)
+    local ux, uy = tx * along, ty * along
+    local vx, vy = -ty * across, tx * across
+    local function at(a: number, b: number): Vector
+        return Vector.xy(cx + ux * a + vx * b, cy + uy * a + vy * b)
+    end
+    path:moveTo(at(1, 0))
+    path:cubicTo(at(1, KAPPA), at(KAPPA, 1), at(0, 1))
+    path:cubicTo(at(-KAPPA, 1), at(-1, KAPPA), at(-1, 0))
+    path:cubicTo(at(-1, -KAPPA), at(-KAPPA, -1), at(0, -1))
+    path:cubicTo(at(KAPPA, -1), at(1, -KAPPA), at(1, 0))
+    path:close()
+end
+
+local function smoothstep(t: number): number
+    return t * t * (3 - 2 * t)
+end
+
+-- Rotates from angle a toward b by fraction t, the short way round.
+local function lerpAngle(a: number, b: number, t: number): number
+    local diff = (b - a + PI) % (2 * PI) - PI
+    return a + diff * t
 end
 
 -- Pushes the sim's numbers into the Game view model; the HUD binds to it.
@@ -266,6 +335,14 @@ local function restart(self: Game)
     Sim.reset(self.sim, 'playing')
     self.rings = Fog.newRings()
     self.dirAngle = 0 -- the snake starts facing right
+    local dir = self.sim.dir
+    local facing = math.atan2(dir.y, dir.x)
+    self.lastDir = { x = dir.x, y = dir.y }
+    self.faceAngle = facing
+    self.turnFrom = facing
+    self.turnTo = facing
+    self.seenEaten = 0
+    self.eatUntil = -1
     self.beatPhase = 0
     self.sinceEnd = 0
     publish(self)
@@ -433,6 +510,62 @@ local function headTile(sim: Sim.Sim): (number, number)
     return a.x + (b.x - a.x) * t + 0.5, a.y + (b.y - a.y) * t + 0.5
 end
 
+-- What the head should be doing now: a hit outranks a meal, which outranks a lunge.
+local function headStateOf(sim: Sim.Sim, eatUntil: number): HeadState
+    if sim.hitTime >= 0 and sim.time - sim.hitTime < Config.HIT_FX_TIME then
+        return 'hit'
+    elseif sim.time < eatUntil then
+        return 'eat'
+    elseif sim.lungeLeft > 0 then
+        return 'lunge'
+    end
+    return 'idle'
+end
+
+-- Drives the SnakeHead instance: its state and hunger through its view model, and
+-- where it points. The facing swings from the previous heading to the new one
+-- over the first part of the tick the turn happens in, so it is tied to the same
+-- clock as the slide and never snaps.
+local function headOf(self: Game): Artboard<Data.SnakeHead>
+    local existing = self.head
+    if existing ~= nil then
+        return existing
+    end
+    local made = self.snakeHead:instance(Data.SnakeHead.new())
+    made:advance(0)
+    self.head = made
+    return made
+end
+
+local function syncHead(self: Game, seconds: number)
+    local sim = self.sim
+    local head = headOf(self)
+
+    if sim.eaten > self.seenEaten then
+        self.eatUntil = sim.time + EAT_TIME
+    end
+    self.seenEaten = sim.eaten
+    local state = headStateOf(sim, self.eatUntil)
+    if state ~= self.headState then
+        head.data.state.value = state
+        self.headState = state
+    end
+    local hunger = math.clamp((1 - sim.vision) / (1 - Config.VISION_FLOOR), 0, 1)
+    if head.data.hunger.value ~= hunger then
+        head.data.hunger.value = hunger
+    end
+    head:advance(seconds)
+
+    local dir = sim.dir
+    if dir.x ~= self.lastDir.x or dir.y ~= self.lastDir.y then
+        self.lastDir = { x = dir.x, y = dir.y }
+        self.turnFrom = self.faceAngle -- from wherever it is pointing now, so a reversal mid-swing stays smooth
+        self.turnTo = math.atan2(dir.y, dir.x)
+    end
+    local swing = math.clamp(snakeAlphaOf(sim) / TURN_FRACTION, 0, 1)
+    self.faceAngle = lerpAngle(self.turnFrom, self.turnTo, smoothstep(swing))
+end
+
 function advance(self: Game, seconds: number): boolean
     local sim = self.sim
     local oldHead = { x = sim.cur[1].x, y = sim.cur[1].y }
@@ -451,6 +584,7 @@ function advance(self: Game, seconds: number): boolean
     local live = sim.state == 'playing'
     local liveSeconds = if live then seconds else 0
     syncPeople(self, liveSeconds)
+    syncHead(self, liveSeconds)
     publish(self)
 
     if sim.state == 'won' or sim.state == 'lost' then
@@ -652,6 +786,119 @@ local function drawRings(self: Game, renderer: Renderer)
     end
 end
 
+-- The straight part of the body: a polyline through points 1..last.
+local function polyline(pts: { Vector }, last: number): Path
+    local path = Path.new()
+    path:moveTo(pts[1])
+    for i = 2, last do
+        path:lineTo(pts[i])
+    end
+    return path
+end
+
+-- A tapered run of the body, joints first..last: a disc at every joint and a
+-- quad down every segment, `radii[j] * scale + grow` wide at joint j. Every
+-- contour winds clockwise, so overlaps union instead of cancelling.
+local function addTapered(path: Path, pts: { Vector }, radii: { number }, first: number, last: number, scale: number, grow: number)
+    for j = first, last do
+        local r = radii[j] * scale + grow
+        if r > 0.05 then
+            addCircle(path, pts[j].x, pts[j].y, r)
+        end
+        if j < last then
+            local a = pts[j]
+            local b = pts[j + 1]
+            local dx = b.x - a.x
+            local dy = b.y - a.y
+            local len = math.sqrt(dx * dx + dy * dy)
+            local rb = radii[j + 1] * scale + grow
+            if len > 0.001 and (r > 0.05 or rb > 0.05) then
+                local nx = -dy / len
+                local ny = dx / len
+                path:moveTo(Vector.xy(a.x - nx * r, a.y - ny * r))
+                path:lineTo(Vector.xy(b.x - nx * rb, b.y - ny * rb))
+                path:lineTo(Vector.xy(b.x + nx * rb, b.y + ny * rb))
+                path:lineTo(Vector.xy(a.x + nx * r, a.y + ny * r))
+                path:close()
+            end
+        end
+    end
+end
+
+-- Dark ovals at even arc lengths down the body, turned to follow it. They are
+-- placed by distance from the neck, shifted by `phase` (how far the head has
+-- slid this tick) so the pattern rides along with the skin instead of sitting
+-- still while the snake moves under it.
+local function buildSpots(pts: { Vector }, cum: { number }, taperFrom: number, phase: number): Path
+    local spots = Path.new()
+    local n = #pts
+    local total = cum[n]
+    local taperStart = cum[taperFrom]
+    local center = polyline(pts, n):measure()
+    local d = SPOT_FIRST - SPOT_SPACING + phase
+    while d < total do
+        local grow = math.clamp((d - SPOT_GROW_FROM) / SPOT_GROW_LEN, 0, 1)
+        local taper = if d <= taperStart then 1 else 1 - (d - taperStart) / math.max(0.001, total - taperStart)
+        local size = grow * taper
+        if size > 0.25 then
+            local p, t = center:positionAndTangent(d)
+            addOval(spots, p.x, p.y, t.x, t.y, SPOT_ALONG * size, SPOT_ACROSS * size)
+        end
+        d += SPOT_SPACING
+    end
+    return spots
+end
+
+-- Shadow, outline, olive, spine highlight, spots: each coat is a stroke down the
+-- straight part of the body and a filled taper for the last TAIL_SEGMENTS.
+local function drawBody(self: Game, renderer: Renderer, pts: { Vector }, phase: number)
+    local n = #pts
+    local tail = math.min(TAIL_SEGMENTS, n - 2)
+    local taperFrom = n - tail -- the joint where the taper begins
+
+    -- Arc length from the neck to each joint, and the half-width at each: full
+    -- down to the taper, then falling in a straight line to a point.
+    local cum: { number } = { 0 }
+    for i = 2, n do
+        local dx = pts[i].x - pts[i - 1].x
+        local dy = pts[i].y - pts[i - 1].y
+        cum[i] = cum[i - 1] + math.sqrt(dx * dx + dy * dy)
+    end
+    local radii: { number } = {}
+    local span = math.max(0.001, cum[n] - cum[taperFrom])
+    for i = 1, n do
+        radii[i] = if i <= taperFrom then BODY_WIDTH / 2 else (BODY_WIDTH / 2) * (1 - (cum[i] - cum[taperFrom]) / span)
+    end
+
+    -- The shadow is one filled silhouette, as wide as the outlined body, so its
+    -- 35% black is laid down once however much the pieces overlap; a stroke plus
+    -- a tail would double up where they meet. The head's own shadow is part of it.
+    local shadow = Path.new()
+    addTapered(shadow, pts, radii, 1, n, 1, OUTLINE_GROW / 2)
+    local face = self.faceAngle
+    addOval(shadow, pts[1].x + math.cos(face) * 8, pts[1].y + math.sin(face) * 8, math.cos(face), math.sin(face), 17, 16)
+    renderer:save()
+    renderer:transform(Mat2D.withTranslation(SHADOW_DX, SHADOW_DY))
+    renderer:drawPath(shadow, self.shadowPaint)
+    renderer:restore()
+
+    local coats: { { layer: BodyLayer, scale: number, grow: number } } = {
+        { layer = self.outlineLayer, scale = 1, grow = OUTLINE_GROW / 2 },
+        { layer = self.bodyLayer, scale = 1, grow = 0 },
+        { layer = self.spineLayer, scale = SPINE_FRACTION, grow = 0 },
+    }
+    for _, coat in coats do
+        renderer:drawPath(polyline(pts, taperFrom), coat.layer.stroke)
+        if tail > 0 then
+            local taper = Path.new()
+            addTapered(taper, pts, radii, taperFrom, n, coat.scale, coat.grow)
+            renderer:drawPath(taper, coat.layer.fill)
+        end
+    end
+
+    renderer:drawPath(buildSpots(pts, cum, taperFrom, phase), self.spotPaint)
+end
+
 function draw(self: Game, renderer: Renderer)
     if self.size.x <= 0 or self.size.y <= 0 then
         return
@@ -718,7 +965,8 @@ function draw(self: Game, renderer: Renderer)
     local snakeAlpha = snakeAlphaOf(sim)
 
     -- Fresh paths every frame: a drawn Path must never be mutated.
-    -- After a hit the head blinks and shakes, fading out over HIT_FX_TIME.
+    -- After a hit the head shakes, fading out over HIT_FX_TIME (its blink is the
+    -- SnakeHead's own `hit` state).
     local sinceHit = sim.time - sim.hitTime
     local fx = 0.0
     if sim.hitTime >= 0 and sinceHit < Config.HIT_FX_TIME then
@@ -731,22 +979,33 @@ function draw(self: Game, renderer: Renderer)
     local nudgeX = if bump ~= nil then bump.x * nudge else 0
     local nudgeY = if bump ~= nil then bump.y * nudge else 0
 
-    local body = Path.new()
-    local head = Path.new()
+    local pts: { Vector } = {}
     for i = 1, #sim.cur do
-        local p = lerpCell(sim.prev[i], sim.cur[i], snakeAlpha)
-        if i == 1 then
-            body:moveTo(p)
-            local hx = p.x + nudgeX + math.sin(sinceHit * 90) * SHAKE_AMPLITUDE * fx
-            local hy = p.y + nudgeY + math.cos(sinceHit * 110) * SHAKE_AMPLITUDE * fx
-            addCircle(head, hx, hy, HEAD_RADIUS)
-        else
-            body:lineTo(p)
-        end
+        pts[i] = lerpCell(sim.prev[i], sim.cur[i], snakeAlpha)
     end
-    renderer:drawPath(body, self.bodyPaint)
-    local blink = fx > 0 and math.floor(sinceHit * 24) % 2 == 0
-    renderer:drawPath(head, if blink then self.flashPaint else self.headPaint)
+
+    -- How far the skin has slid since the tick began: the head covers one tile a
+    -- tick, and only on a tick where it actually moved (not into a wall).
+    local first = sim.prev[1]
+    local second = sim.cur[1]
+    local moved = first.x ~= second.x or first.y ~= second.y
+    local phase = if moved then (snakeAlpha * TILE) % SPOT_SPACING else 0
+
+    drawBody(self, renderer, pts, phase)
+
+    -- The head sits on top, its neck on the head point, turned to face the way
+    -- the snake is going.
+    local head = self.head
+    if head ~= nil then
+        local hx = pts[1].x + nudgeX + math.sin(sinceHit * 90) * SHAKE_AMPLITUDE * fx
+        local hy = pts[1].y + nudgeY + math.cos(sinceHit * 110) * SHAKE_AMPLITUDE * fx
+        renderer:save()
+        renderer:transform(Mat2D.withTranslation(hx, hy))
+        renderer:transform(Mat2D.withRotation(self.faceAngle))
+        renderer:transform(Mat2D.withTranslation(-HEAD_NECK_X, -HEAD_NECK_Y))
+        head:draw(renderer)
+        renderer:restore()
+    end
 
     renderer:restore()
 end
@@ -767,25 +1026,31 @@ return function(context: Context): Layout<Game>
         end
     end
 
+    local function bodyLayer(thickness: number, color: Color): BodyLayer
+        return {
+            stroke = Paint.with({ style = 'stroke', thickness = thickness, cap = 'round', join = 'round', color = color }),
+            fill = Paint.with({ style = 'fill', color = color }),
+        }
+    end
+
     return {
         person = late(),
+        snakeHead = late(),
         sim = sim,
         people = {},
+        head = nil,
+        headState = 'idle',
         floorImage = nil,
         wallsImage = nil,
         maskPath = maskPath,
         maskPaint = Paint.with({ style = 'fill', color = Color.rgb(255, 255, 255) }),
         exitPath = exitPath,
         exitPaint = Paint.with({ style = 'fill', color = Color.rgb(229, 57, 53) }),
-        bodyPaint = Paint.with({
-            style = 'stroke',
-            thickness = BODY_WIDTH,
-            cap = 'round',
-            join = 'round',
-            color = Color.rgb(67, 160, 71),
-        }),
-        headPaint = Paint.with({ style = 'fill', color = Color.rgb(102, 204, 106) }),
-        flashPaint = Paint.with({ style = 'fill', color = Color.rgb(255, 235, 230) }),
+        shadowPaint = Paint.with({ style = 'fill', color = Color.rgba(0, 0, 0, SHADOW_ALPHA), feather = SHADOW_FEATHER }),
+        outlineLayer = bodyLayer(BODY_WIDTH + OUTLINE_GROW, Color.rgb(34, 42, 18)),
+        bodyLayer = bodyLayer(BODY_WIDTH, Color.rgb(104, 122, 48)),
+        spineLayer = bodyLayer(BODY_WIDTH * SPINE_FRACTION, Color.rgb(152, 172, 86)),
+        spotPaint = Paint.with({ style = 'fill', color = Color.rgb(50, 62, 26) }),
         size = Vector.xy(0, 0),
         scale = 1,
         context = nil,
@@ -795,6 +1060,12 @@ return function(context: Context): Layout<Game>
         elapsed = 0,
         beatPhase = 0,
         dirAngle = 0, -- the snake starts facing right
+        faceAngle = 0,
+        turnFrom = 0,
+        turnTo = 0,
+        lastDir = { x = 1, y = 0 },
+        seenEaten = 0,
+        eatUntil = -1,
         seenBump = -1,
         nudgeDistance = 0,
         rings = Fog.newRings(),

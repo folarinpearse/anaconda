@@ -266,6 +266,7 @@
             <ScriptedLayout scriptAssetId="0:80" name="Anaconda Game" id="0:12">
                 <FocusData id="0:145"/>
                 <ScriptInputArtboard artboardId="0:200" name="person" id="0:529"/>
+                <ScriptInputArtboard artboardId="0:1000" name="snakeHead" id="0:1900"/>
             </ScriptedLayout>
         </LayoutComponent>
 
