@@ -484,6 +484,33 @@ return function(): Tests
                 expect(sim.hp).is(Config.MAX_HP - 2)
             end)
 
+            test.case('every bump is timestamped, damaging or not', function(expect)
+                local function ram(sim: Sim.Sim)
+                    sim.cur = { { x = 10, y = 4 }, { x = 9, y = 4 } }
+                    sim.prev = table.clone(sim.cur)
+                    sim.dir = Sim.RIGHT
+                    Sim.stepSnake(sim)
+                end
+                local sim = arena(12, 9, { { x = 10, y = 4 }, { x = 9, y = 4 } }, Sim.RIGHT)
+                expect(sim.bumpTime).lessThan(0)
+                ram(sim)
+                expect(sim.bumpTime).is(sim.time)
+                expect(sim.bumpTime).is(sim.hitTime)
+
+                -- A free bump inside the window moves bumpTime but not hitTime.
+                local firstHit = sim.hitTime
+                frames(sim, 6)
+                ram(sim)
+                expect(sim.hp).is(Config.MAX_HP - 1)
+                expect(sim.hitTime).is(firstHit)
+                expect(sim.bumpTime).is(sim.time)
+                expect(sim.bumpTime).greaterThan(firstHit)
+                expect((sim.bumpDir :: Sim.Cell).x).is(1)
+
+                Sim.reset(sim, 'playing')
+                expect(sim.bumpTime).lessThan(0)
+            end)
+
             test.case('a bounce chain cannot drain several HP', function(expect)
                 -- A room three tiles tall: hit the east wall, bounce south, hit
                 -- the south wall one step later, bounce west. Two impacts, 1 HP.

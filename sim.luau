@@ -43,6 +43,7 @@ export type Sim = {
     snakeAcc: number, -- progress to the next step, in base-tick units
     guestAcc: number,
     bumpDir: Cell?, -- direction of the last wall/self bump, damaging or not
+    bumpTime: number, -- sim.time of that bump; negative if none yet
 
     -- health
     hp: number,
@@ -476,6 +477,7 @@ function Sim.reset(sim: Sim, state: string)
     sim.snakeAcc = 0
     sim.guestAcc = 0
     sim.bumpDir = nil
+    sim.bumpTime = -1
     sim.hp = Config.MAX_HP
     sim.invulnLeft = 0
     sim.hitCell = nil
@@ -543,6 +545,7 @@ function Sim.new(level: { string }, seed: number): Sim
         snakeAcc = 0,
         guestAcc = 0,
         bumpDir = nil,
+        bumpTime = -1,
         hp = Config.MAX_HP,
         invulnLeft = 0,
         hitCell = nil,
@@ -632,6 +635,7 @@ local function hit(sim: Sim, x: number, y: number)
     sim.turns = {}
     sim.lungeLeft = 0
     sim.bumpDir = { x = sim.dir.x, y = sim.dir.y }
+    sim.bumpTime = sim.time
     sim.prev = table.clone(sim.cur) -- nothing slides this tick
     if sim.invulnLeft <= 0 then
         sim.hp = math.max(0, sim.hp - 1)

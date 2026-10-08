@@ -38,6 +38,8 @@ type Game = {
     elapsed: number,
     beatPhase: number, -- 0-1 through the current heartbeat
     dirAngle: number, -- smoothed facing of the head, radians
+    seenBump: number, -- the sim.bumpTime last looked at, to spot a new bump
+    nudgeDistance: number, -- px the head leans on the current bump; 0 = no nudge
     rings: Fog.Rings,
 
     -- the vision pass: scene -> vision.wgsl -> gpu canvas -> drawImage
@@ -89,6 +91,12 @@ local KEY_DIRS: { [number]: Cell } = {
 local KEY_SPACE = 32
 local KEY_SHIFTS: { [number]: boolean } = { [340] = true, [344] = true } -- left, right
 local SHAKE_AMPLITUDE = 5 -- px at the moment of impact
+-- px the drawn head leans into a bump, at its peak. Interior wall art sits back
+-- from the tile edge, so it gets the long lean; the outer walls are flush.
+local NUDGE_INTERIOR = 10 -- interior walls and the snake's own body
+local NUDGE_BORDER = 1 -- outer border tiles
+local NUDGE_OUT_TIME = 0.06 -- seconds to ease out to the peak
+local NUDGE_BACK_TIME = 0.2 -- seconds to spring back
 local BACKGROUND = Color.rgb(20, 23, 28) -- the artboard fill, behind the letterbox
 local UNIFORM_SIZE = 96 -- bytes; the Uniforms struct in vision.wgsl
 local TURN_SPEED = 14 -- how fast the cone swings round to a new heading, per second
@@ -377,6 +385,46 @@ local function guestAlphaOf(sim: Sim.Sim): number
     return 1.0
 end
 
+-- How far the drawn head leans toward the wall, 0-1: eases out to 1, then
+-- springs back to 0. Plays on every bump, damaging or not.
+local function nudgeOf(sim: Sim.Sim): number
+    if sim.bumpTime < 0 then
+        return 0
+    end
+    local age = sim.time - sim.bumpTime
+    if age < NUDGE_OUT_TIME then
+        local rest = 1 - age / NUDGE_OUT_TIME
+        return 1 - rest * rest
+    elseif age < NUDGE_OUT_TIME + NUDGE_BACK_TIME then
+        local rest = 1 - (age - NUDGE_OUT_TIME) / NUDGE_BACK_TIME
+        return rest * rest
+    end
+    return 0
+end
+
+-- How far the head should lean on the bump that just happened: none if the bump
+-- was resolved by swapping ends (the head and tail traded cells, so the old
+-- bump direction means nothing to the new head); otherwise by the tile that was
+-- hit, head cell + bumpDir. Only the outer border is flush with the art.
+local function nudgeDistanceFor(sim: Sim.Sim, oldHead: Cell, oldTail: Cell): number
+    local bump = sim.bumpDir
+    local n = #sim.cur
+    if bump == nil then
+        return 0
+    end
+    local head = sim.cur[1]
+    local tail = sim.cur[n]
+    if n >= 2 and head.x == oldTail.x and head.y == oldTail.y and tail.x == oldHead.x and tail.y == oldHead.y then
+        return 0
+    end
+    local tx = head.x + bump.x
+    local ty = head.y + bump.y
+    if tx == 0 or ty == 0 or tx == sim.cols - 1 or ty == sim.rows - 1 then
+        return NUDGE_BORDER
+    end
+    return NUDGE_INTERIOR
+end
+
 -- The head centre in tile units, mid-slide between ticks.
 local function headTile(sim: Sim.Sim): (number, number)
     local a = sim.prev[1]
@@ -387,7 +435,15 @@ end
 
 function advance(self: Game, seconds: number): boolean
     local sim = self.sim
+    local oldHead = { x = sim.cur[1].x, y = sim.cur[1].y }
+    local oldTail = { x = sim.cur[#sim.cur].x, y = sim.cur[#sim.cur].y }
     Sim.update(sim, seconds)
+    if sim.bumpTime ~= self.seenBump then
+        self.seenBump = sim.bumpTime
+        if sim.bumpTime >= 0 then
+            self.nudgeDistance = nudgeDistanceFor(sim, oldHead, oldTail)
+        end
+    end
 
     -- Under a screen overlay the game is frozen: the guests stop mid-pose and the
     -- clocks that drive the shader and heartbeat stand still. (The win hold is
@@ -669,14 +725,20 @@ function draw(self: Game, renderer: Renderer)
         fx = 1 - sinceHit / Config.HIT_FX_TIME
     end
 
+    -- The bump nudge moves the drawn head only, on top of the shake.
+    local nudge = nudgeOf(sim) * self.nudgeDistance
+    local bump = sim.bumpDir
+    local nudgeX = if bump ~= nil then bump.x * nudge else 0
+    local nudgeY = if bump ~= nil then bump.y * nudge else 0
+
     local body = Path.new()
     local head = Path.new()
     for i = 1, #sim.cur do
         local p = lerpCell(sim.prev[i], sim.cur[i], snakeAlpha)
         if i == 1 then
             body:moveTo(p)
-            local hx = p.x + math.sin(sinceHit * 90) * SHAKE_AMPLITUDE * fx
-            local hy = p.y + math.cos(sinceHit * 110) * SHAKE_AMPLITUDE * fx
+            local hx = p.x + nudgeX + math.sin(sinceHit * 90) * SHAKE_AMPLITUDE * fx
+            local hy = p.y + nudgeY + math.cos(sinceHit * 110) * SHAKE_AMPLITUDE * fx
             addCircle(head, hx, hy, HEAD_RADIUS)
         else
             body:lineTo(p)
@@ -733,6 +795,8 @@ return function(context: Context): Layout<Game>
         elapsed = 0,
         beatPhase = 0,
         dirAngle = 0, -- the snake starts facing right
+        seenBump = -1,
+        nudgeDistance = 0,
         rings = Fog.newRings(),
 
         scene = nil,
