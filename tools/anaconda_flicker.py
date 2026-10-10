@@ -1,0 +1,149 @@
+"""
+ANACONDA — flicker mask for failing fluorescent lights (Blender 4.2+ / 5.x)
+==========================================================================
+
+Rebuilds the level from anaconda_floorplan.py (same folder) and renders it
+once with every light on, then once with each flickering group switched off.
+From those it measures, for every point of the floor, how much of its light
+comes from each group. The game multiplies the scene by that share whenever a
+group's lights dip or die, so a dead kitchen goes dark *including* the light it
+spills through its doorway, while the moonlight from the windows stays.
+
+Run headless:
+    blender --background --python anaconda_flicker.py
+
+Outputs (in anaconda_renders/ next to this script):
+    flicker_mask.png   768x192 atlas: four 192x192 panels side by side (8 px per
+                       tile; sample panel p at (p + worldX/960) / 4, worldY/960).
+                       Panel p, channel c (R,G,B) = group 3p + c, in this order:
+                       0 dj_room, 1 lounge, 2 bar, 3 kitchen, 4 main_hall,
+                       5 games, 6 bathroom, 7 foyer, 8 red_room, 9 corridors
+                       (10 and 11 unused, always 0).
+                       Value = the fraction of that pixel's brightness lost
+                       when that group is off (0 = unaffected, 1 = black).
+    flicker_mask.luau  the same 10 groups at 48x48 (2 samples per tile), for the snake
+"""
+
+import bpy
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import anaconda_floorplan as fp  # noqa: E402
+
+PX_PER_TILE = 8
+SAMPLES_PER_TILE = 2
+
+# Group order is part of the contract with the game (see the docstring).
+ROOM_NAMES = ["dj_room", "lounge", "bar", "kitchen", "main_hall", "games", "bathroom", "foyer", "red_room"]
+GROUPS = [(n, (lambda n: lambda name: name == f"light_{n}")(n)) for n in ROOM_NAMES]
+GROUPS.append(("corridors", lambda name: name.startswith("hall_")))
+
+
+def main():
+    import numpy as np
+
+    fp.clear_scene()
+    fp.SAMPLES = int(os.environ.get("ANACONDA_SAMPLES", 64))
+    fp.OUTLINES = False
+    fp.setup_render()
+    sc = bpy.context.scene
+    sc.render.use_freestyle = False
+    sc.render.film_transparent = False
+    sc.render.resolution_x = sc.render.resolution_y = fp.N * PX_PER_TILE
+
+    col_floor = fp.new_collection("FLOOR")
+    col_walls = fp.new_collection("WALLS")
+    col_lights = fp.new_collection("LIGHTS")
+    col_cam = fp.new_collection("CAMERA")
+    fp.build_floor(col_floor)
+    fp.build_decals(col_floor)
+    fp.build_walls(col_walls)
+    fp.build_windows(col_walls)
+    fp.build_exit(col_walls)
+    fp.build_room_lights(col_lights)
+    fp.build_camera(col_cam)
+
+    d = fp.out_dir()
+    sc.render.image_settings.file_format = "PNG"
+    sc.render.image_settings.color_mode = "RGB"
+    sc.render.image_settings.color_depth = "16"
+
+    def render(tag):
+        path = os.path.join(d, f"_flicker_{tag}.png")
+        fp.render_to(path)
+        img = bpy.data.images.load(path)
+        w, h = img.size
+        a = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, img.channels)[::-1, :, :3]
+        bpy.data.images.remove(img)
+        return a
+
+    def lum(a):
+        return a @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+
+    lit = lum(render("on"))
+    losses = []
+    for tag, match in GROUPS:
+        objs = [o for o in col_lights.objects if match(o.name)]
+        assert objs, f"no lights for group {tag}"
+        for o in objs:
+            o.hide_render = True
+        off = lum(render(tag))
+        for o in objs:
+            o.hide_render = False
+        loss = np.clip(1.0 - off / np.maximum(lit, 1e-4), 0.0, 1.0)
+        loss[lit < 0.01] = 0.0  # already black: nothing to lose
+        losses.append(loss)
+    while len(losses) % 3:
+        losses.append(np.zeros_like(losses[0]))
+    mask = np.stack(losses, axis=2)
+
+    # soften by a texel so sampling never shows the render's noise
+    k = np.array([0.25, 0.5, 0.25], dtype=np.float32)
+    for axis in (0, 1):
+        mask = np.apply_along_axis(lambda v: np.convolve(np.pad(v, 1, mode="edge"), k, "valid"), axis, mask)
+
+    hh, ww, nch = mask.shape
+    panels = nch // 3
+    atlas = np.concatenate([mask[:, :, 3 * p:3 * p + 3] for p in range(panels)], axis=1)
+    im = bpy.data.images.new("flicker_mask", ww * panels, hh)
+    rgba = np.concatenate([atlas, np.ones((hh, ww * panels, 1), dtype=np.float32)], axis=2)[::-1]
+    im.pixels = rgba.astype(np.float32).ravel().tolist()
+    im.filepath_raw = os.path.join(d, "flicker_mask.png")
+    im.file_format = "PNG"
+    im.save()
+
+    s = PX_PER_TILE // SAMPLES_PER_TILE
+    G = fp.N * SAMPLES_PER_TILE
+    n = len(GROUPS)
+    grid = mask[:, :, :n].reshape(G, s, G, s, n).mean(axis=(1, 3))
+    q = np.clip(np.round(grid * 255), 0, 255).astype(int)
+    names = ", ".join(f"'{g[0]}'" for g in GROUPS)
+    lines = [
+        "-- Generated by anaconda_flicker.py. Do not edit by hand.",
+        "-- Share of the light at each point that belongs to each light group",
+        "-- (same data as flicker_mask.png): 0 = unaffected, 255 = all of it.",
+        f"-- {G}x{G} samples, {SAMPLES_PER_TILE} per tile, sample centres at (i + 0.5) / {SAMPLES_PER_TILE} tiles,",
+        "-- row 0 at the top. Flat, row-major: index = (row * size + col) * #groups + group (1-based).",
+        "return {",
+        f"    size = {G},",
+        f"    perTile = {SAMPLES_PER_TILE},",
+        f"    groups = {{ {names} }},",
+        "    loss = {",
+    ]
+    for r in range(G):
+        lines.append("        " + ", ".join(",".join(str(v) for v in q[r, c]) for c in range(G)) + ",")
+    lines += ["    },", "}", ""]
+    with open(os.path.join(d, "flicker_mask.luau"), "w") as f:
+        f.write("\n".join(lines))
+    for tag in ["on"] + [g[0] for g in GROUPS]:
+        try:
+            os.remove(os.path.join(d, f"_flicker_{tag}.png"))
+        except OSError:
+            pass
+    print("[anaconda] flicker mask ->", d)
+
+
+if __name__ == "__main__":
+    main()
