@@ -10,6 +10,7 @@ local Config = require('config')
 local Fog = require('fog')
 local Lighting = require('lighting')
 local Flicker = require('flicker')
+local BodyPath = require('bodypath')
 local LEVEL = require('level')
 
 type Cell = Sim.Cell
@@ -22,16 +23,17 @@ type PersonRec = {
 -- The values of the SnakeHead artboard's `state` enum (snakehead.rml).
 type HeadState = 'idle' | 'lunge' | 'eat' | 'hit'
 
--- The body as samples down its smoothed path, neck first: where it is, how far
--- along, which way is the snake's left, and how wide.
+-- The body as samples down its smoothed path (bodypath.luau), neck first: where
+-- it is, how far along, which way is the snake's left, and how wide.
 type Body = {
     x: { number },
     y: { number },
-    a: { number }, -- arc length from the neck, px
+    a: { number }, -- distance along the trail from the neck, px
     nx: { number }, -- unit normal pointing to the snake's left
     ny: { number },
     hw: { number }, -- half-width
     n: number,
+    length: number, -- the whole trail, px
 }
 
 type Game = {
@@ -61,10 +63,8 @@ type Game = {
     elapsed: number,
     beatPhase: number, -- 0-1 through the current heartbeat
     dirAngle: number, -- smoothed facing of the vision cone, radians
-    faceAngle: number, -- where the drawn head points, radians: swings round across a tick
-    turnFrom: number, -- the facing the current swing started from
-    turnTo: number, -- ...and the heading it is swinging to
-    lastDir: Cell, -- the sim.dir last looked at, to spot a turn
+    path: BodyPath.Path?, -- the body's path this frame, laid by syncHead
+    faceAngle: number, -- where the drawn head points, radians: the path's tangent at the neck
     seenEaten: number, -- the sim.eaten last looked at, to spot a meal
     eatUntil: number, -- sim.time until which the head shows its eat animation
     seenBump: number, -- the sim.bumpTime last looked at, to spot a new bump
@@ -128,21 +128,24 @@ local PERSON_SIZE = 32
 local HEAD_NECK_X = 12
 local HEAD_NECK_Y = 24
 local EAT_TIME = 0.5 -- seconds the head shows its eat animation after a meal (30 frames)
-local TURN_FRACTION = 0.6 -- share of a tick the head takes to swing round to a new heading
+
+-- The head faces along the body's path where its back edge sits, HEAD_NECK_X px
+-- behind the neck joint: it swings round with the neck's curve through a turn
+-- (a corner behind it sweeps past that point as the head leaves it) and is
+-- dead straight on a straight run.
+local HEAD_FACE_ARC = HEAD_NECK_X
 
 -- The body is one textured strip down the smoothed path of the joints. It is
 -- BODY_HALF_WIDTH to either side at full width, narrows to NECK_HALF just behind
 -- the head (the head art's back edge) and widens to full over NECK_GROW, and
--- tapers to a point over the last TAIL_SEGMENTS segments.
+-- tapers to a point over the last TAIL_SEGMENTS tiles. All of it is measured
+-- along the trail from the neck.
 local BODY_HALF_WIDTH = 17
 local NECK_HALF = 11
 local NECK_GROW_FROM = 6 -- arc length from the neck where it starts to widen,
 local NECK_GROW_TO = 46 -- and where it is full width: about a tile back
 local TAIL_SEGMENTS = 3
 local SKIN_LENGTH = 160 -- game px of snake_skin.png before it repeats
-local FILLET = TILE / 2 -- radius of every rounded corner
-local FILLET_STEPS = 8
-local RUN_STEP = 10 -- px between samples on a straight run
 local LIGHT_CHUNK = TILE -- the light pass is cut into pieces about this long
 
 -- The body is lit from straight above and casts a shadow, which the head's
@@ -235,12 +238,6 @@ end
 
 local function smoothstep(t: number): number
     return t * t * (3 - 2 * t)
-end
-
--- Rotates from angle a toward b by fraction t, the short way round.
-local function lerpAngle(a: number, b: number, t: number): number
-    local diff = (b - a + PI) % (2 * PI) - PI
-    return a + diff * t
 end
 
 -- Pushes the sim's numbers into the Game view model; the HUD binds to it.
@@ -379,12 +376,8 @@ local function restart(self: Game)
     self.flash = 0
     self.sightIntensity = 1
     self.dirAngle = 0 -- the snake starts facing right
-    local dir = self.sim.dir
-    local facing = math.atan2(dir.y, dir.x)
-    self.lastDir = { x = dir.x, y = dir.y }
-    self.faceAngle = facing
-    self.turnFrom = facing
-    self.turnTo = facing
+    self.path = nil -- the next advance lays the new snake's path
+    self.faceAngle = math.atan2(self.sim.dir.y, self.sim.dir.x)
     self.seenEaten = 0
     self.shadowLift = 0
     self.eatUntil = -1
@@ -583,9 +576,9 @@ local function headStateOf(sim: Sim.Sim, eatUntil: number): HeadState
 end
 
 -- Drives the SnakeHead instance: its state and hunger through its view model, and
--- where it points. The facing swings from the previous heading to the new one
--- over the first part of the tick the turn happens in, so it is tied to the same
--- clock as the slide and never snaps.
+-- where it points. It points along the body's path (see HEAD_FACE_ARC), which is
+-- laid here once a frame for the draw and the head's light to share; the path is
+-- tied to the same clock as the slide, so the head never snaps.
 local function headOf(self: Game): Artboard<Data.SnakeHead>
     local existing = self.head
     if existing ~= nil then
@@ -616,14 +609,9 @@ local function syncHead(self: Game, seconds: number)
     end
     head:advance(seconds)
 
-    local dir = sim.dir
-    if dir.x ~= self.lastDir.x or dir.y ~= self.lastDir.y then
-        self.lastDir = { x = dir.x, y = dir.y }
-        self.turnFrom = self.faceAngle -- from wherever it is pointing now, so a reversal mid-swing stays smooth
-        self.turnTo = math.atan2(dir.y, dir.x)
-    end
-    local swing = math.clamp(snakeAlphaOf(sim) / TURN_FRACTION, 0, 1)
-    self.faceAngle = lerpAngle(self.turnFrom, self.turnTo, smoothstep(swing))
+    local path = BodyPath.build(sim.prev, sim.cur, snakeAlphaOf(sim), TILE)
+    self.path = path
+    self.faceAngle = BodyPath.facing(path, HEAD_FACE_ARC)
 end
 
 -- The head's shadow swells and blurs while it lunges or eats, and settles after.
@@ -1003,120 +991,28 @@ local function smoothBetween(edge0: number, edge1: number, x: number): number
     return smoothstep(math.clamp((x - edge0) / (edge1 - edge0), 0, 1))
 end
 
--- Samples down the body's path, neck first, with the corners rounded. `pts` are
--- the joints, head first. Every corner becomes a quadratic fillet from FILLET px
--- before the joint to FILLET px after it, the joint as its control point, in
--- FILLET_STEPS steps (less where the segments are shorter than twice that, so
--- neighbouring fillets never overlap); straight runs get a sample every
--- RUN_STEP px. `taperJoint` is the joint where the tail starts to narrow.
-local function buildBody(pts: { Vector }, taperJoint: number): Body
-    -- Joints that sit on the one before have no direction: leave them out.
-    local jx: { number } = {}
-    local jy: { number } = {}
-    local joint: { number } = {} -- for each of `pts`, its place in jx / jy
-    local m = 0
-    for i, p in pts do
-        if m == 0 or (p.x - jx[m]) ^ 2 + (p.y - jy[m]) ^ 2 > 0.01 then
-            m += 1
-            jx[m] = p.x
-            jy[m] = p.y
-        end
-        joint[i] = m
-    end
-
-    -- Each segment's length and unit direction.
-    local len: { number } = {}
-    local dx: { number } = {}
-    local dy: { number } = {}
-    for k = 1, m - 1 do
-        local sx = jx[k + 1] - jx[k]
-        local sy = jy[k + 1] - jy[k]
-        len[k] = math.sqrt(sx * sx + sy * sy)
-        dx[k] = sx / len[k]
-        dy[k] = sy / len[k]
-    end
-
-    local x: { number } = {}
-    local y: { number } = {}
-    local at: { number } = {} -- sample index at each joint (the middle of a fillet)
-    local n = 0
-    local lastX, lastY = jx[1], jy[1]
-    local function emit(px: number, py: number)
-        n += 1
-        x[n] = px
-        y[n] = py
-        lastX, lastY = px, py
-    end
-    local function run(toX: number, toY: number)
-        local fromX, fromY = lastX, lastY
-        local length = math.sqrt((toX - fromX) ^ 2 + (toY - fromY) ^ 2)
-        if length < 0.01 then
-            return
-        end
-        local steps = math.ceil(length / RUN_STEP)
-        for s = 1, steps do
-            emit(fromX + (toX - fromX) * s / steps, fromY + (toY - fromY) * s / steps)
-        end
-    end
-
-    emit(jx[1], jy[1])
-    at[1] = 1
-    for k = 2, m do
-        local cornerR = 0.0
-        if k < m then
-            local cross = dx[k - 1] * dy[k] - dy[k - 1] * dx[k]
-            local dot = dx[k - 1] * dx[k] + dy[k - 1] * dy[k]
-            if math.abs(cross) > 0.001 or dot < 0 then
-                cornerR = math.min(FILLET, len[k - 1] / 2, len[k] / 2)
-            end
-        end
-        if cornerR > 0.01 then
-            local ax, ay = jx[k] - dx[k - 1] * cornerR, jy[k] - dy[k - 1] * cornerR
-            local bx, by = jx[k] + dx[k] * cornerR, jy[k] + dy[k] * cornerR
-            run(ax, ay)
-            for s = 1, FILLET_STEPS do
-                local t = s / FILLET_STEPS
-                local u = 1 - t
-                emit(u * u * ax + 2 * u * t * jx[k] + t * t * bx, u * u * ay + 2 * u * t * jy[k] + t * t * by)
-                if s == FILLET_STEPS // 2 then
-                    at[k] = n
-                end
-            end
-        else
-            run(jx[k], jy[k])
-            at[k] = n
-        end
-    end
-
-    -- Arc length from the neck, and which way each sample faces. The path runs
-    -- neck to tail, so the snake's left is the tangent turned the other way.
-    local a: { number } = { 0 }
-    for i = 2, n do
-        a[i] = a[i - 1] + math.sqrt((x[i] - x[i - 1]) ^ 2 + (y[i] - y[i - 1]) ^ 2)
-    end
-    local nx: { number } = {}
-    local ny: { number } = {}
-    for i = 1, n do
-        local tx = x[math.min(i + 1, n)] - x[math.max(i - 1, 1)]
-        local ty = y[math.min(i + 1, n)] - y[math.max(i - 1, 1)]
-        local tl = math.sqrt(tx * tx + ty * ty)
-        if tl < 0.0001 then
-            nx[i], ny[i] = 0, -1
-        else
-            nx[i], ny[i] = -ty / tl, tx / tl
-        end
-    end
-
-    -- Half-width: full, narrowed behind the head, and tapered to a point at the tip.
-    local taperFrom = a[at[joint[taperJoint]]]
-    local span = math.max(0.001, a[n] - taperFrom)
+-- Gives the body path its widths: full, narrowed behind the head, and tapered to
+-- a point at the tip over the last TAIL_SEGMENTS tiles (on a short snake, over
+-- at most three quarters of it). Everything is measured along the trail, which
+-- is as long all tick, so nothing swims within it.
+local function shapeBody(path: BodyPath.Path): Body
+    local taperLength = math.min(TAIL_SEGMENTS * TILE, path.length * 0.75)
     local hw: { number } = {}
-    for i = 1, n do
-        local neck = NECK_HALF + (BODY_HALF_WIDTH - NECK_HALF) * smoothBetween(NECK_GROW_FROM, NECK_GROW_TO, a[i])
-        local tail = if a[i] <= taperFrom then 1 else math.max(0, 1 - (a[i] - taperFrom) / span)
+    for i = 1, path.n do
+        local neck = NECK_HALF + (BODY_HALF_WIDTH - NECK_HALF) * smoothBetween(NECK_GROW_FROM, NECK_GROW_TO, path.a[i])
+        local tail = math.clamp((path.length - path.a[i]) / taperLength, 0, 1)
         hw[i] = neck * tail
     end
-    return { x = x, y = y, a = a, nx = nx, ny = ny, hw = hw, n = n }
+    return {
+        x = path.x,
+        y = path.y,
+        a = path.a,
+        nx = path.nx,
+        ny = path.ny,
+        hw = hw,
+        n = path.n,
+        length = path.length,
+    }
 end
 
 -- The strip over samples i0..i1 as mesh buffers: two vertices per sample, the
@@ -1215,16 +1111,14 @@ local function drawLight(self: Game, renderer: Renderer, body: Body)
 end
 
 -- Shadow, then the skin, then the room light over it.
-local function drawBody(self: Game, renderer: Renderer, pts: { Vector })
-    local n = #pts
-    local tail = math.max(1, math.min(TAIL_SEGMENTS, n - 2))
-    local body = buildBody(pts, n - tail)
+local function drawBody(self: Game, renderer: Renderer, path: BodyPath.Path)
+    local body = shapeBody(path)
 
     -- The shadow is one filled silhouette, so its 35% black is laid down once
     -- however much the pieces overlap. The head's own shadow is part of it.
     local lift = smoothstep(self.shadowLift)
     local face = self.faceAngle
-    local ahead = Vector.xy(pts[1].x + math.cos(face) * HEAD_SHADOW_AHEAD, pts[1].y + math.sin(face) * HEAD_SHADOW_AHEAD)
+    local ahead = Vector.xy(path.x[1] + math.cos(face) * HEAD_SHADOW_AHEAD, path.y[1] + math.sin(face) * HEAD_SHADOW_AHEAD)
     local shadow = bodyOutline(body)
     addOval(shadow, ahead.x, ahead.y, math.cos(face), math.sin(face), HEAD_SHADOW_ALONG, HEAD_SHADOW_ACROSS)
     self.shadowPaint.feather = SHADOW_FEATHER + (SHADOW_LIFT_FEATHER - SHADOW_FEATHER) * lift
@@ -1329,19 +1223,15 @@ function draw(self: Game, renderer: Renderer)
     local nudgeX = if bump ~= nil then bump.x * nudge else 0
     local nudgeY = if bump ~= nil then bump.y * nudge else 0
 
-    local pts: { Vector } = {}
-    for i = 1, #sim.cur do
-        pts[i] = lerpCell(sim.prev[i], sim.cur[i], snakeAlpha)
-    end
-
-    drawBody(self, renderer, pts)
+    local path = self.path or BodyPath.build(sim.prev, sim.cur, snakeAlpha, TILE)
+    drawBody(self, renderer, path)
 
     -- The head sits on top, its neck on the head point, turned to face the way
     -- the snake is going.
     local head = self.head
     if head ~= nil then
-        local hx = pts[1].x + nudgeX + math.sin(sinceHit * 90) * SHAKE_AMPLITUDE * fx
-        local hy = pts[1].y + nudgeY + math.cos(sinceHit * 110) * SHAKE_AMPLITUDE * fx
+        local hx = path.x[1] + nudgeX + math.sin(sinceHit * 90) * SHAKE_AMPLITUDE * fx
+        local hy = path.y[1] + nudgeY + math.cos(sinceHit * 110) * SHAKE_AMPLITUDE * fx
         renderer:save()
         renderer:transform(Mat2D.withTranslation(hx, hy))
         renderer:transform(Mat2D.withRotation(self.faceAngle))
@@ -1399,10 +1289,8 @@ return function(context: Context): Layout<Game>
         elapsed = 0,
         beatPhase = 0,
         dirAngle = 0, -- the snake starts facing right
+        path = nil,
         faceAngle = 0,
-        turnFrom = 0,
-        turnTo = 0,
-        lastDir = { x = 1, y = 0 },
         seenEaten = 0,
         eatUntil = -1,
         seenBump = -1,
