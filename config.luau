@@ -63,6 +63,14 @@ return {
     -- one event and the next.
     FLICKER_ENABLED = true, -- false: every group stays at 1.0
     LIGHTS_QUIET_TIME = 3, -- no events in the first seconds of a run
+    -- Safe flashing: no more than 3 deep flashes a second. A group's level may
+    -- only start a drop below SAFE_FLASH_FLOOR if its last such drop began at
+    -- least SAFE_FLASH_INTERVAL ago, and sits at the floor until then; faster
+    -- flicker keeps its rhythm above it. The strike flash is limited too.
+    SAFE_FLASHING = true,
+    SAFE_FLASH_FLOOR = 0.6,
+    SAFE_FLASH_INTERVAL = 0.333, -- seconds
+    SAFE_STRIKE_INTERVAL = 0.5, -- seconds between strike flashes
     ENTRY_DELAY = { 0.15, 0.5 }, -- a room fires its event this long after the head enters
 
     -- dj_room "party": base pulses to the beat, events are strobe bursts

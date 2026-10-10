@@ -70,8 +70,6 @@ type Game = {
     seenBump: number, -- the sim.bumpTime last looked at, to spot a new bump
     nudgeDistance: number, -- px the head leans on the current bump; 0 = no nudge
     rings: Fog.Rings,
-    moveTicks: number, -- ticks since the start on which the head moved
-    lastHead: Cell, -- the head cell last looked at, to count those
     shadowLift: number, -- 0-1: the head's shadow swelling while it lunges or eats
 
     -- lights: flicker.luau's controllers, and what the vision pass and the snake make of them
@@ -388,8 +386,6 @@ local function restart(self: Game)
     self.turnFrom = facing
     self.turnTo = facing
     self.seenEaten = 0
-    self.moveTicks = 0
-    self.lastHead = { x = self.sim.cur[1].x, y = self.sim.cur[1].y }
     self.shadowLift = 0
     self.eatUntil = -1
     self.beatPhase = 0
@@ -630,28 +626,6 @@ local function syncHead(self: Game, seconds: number)
     self.faceAngle = lerpAngle(self.turnFrom, self.turnTo, smoothstep(swing))
 end
 
--- Counts the ticks on which the head moved, for the skin. A frame can span
--- several (a lunge, a slow frame): the head's old cell is found among the new
--- body cells, which trail the head's route, and its depth there is the number of
--- steps. When it is not there (the snake swapped ends) it counts as one.
-local function countMoves(self: Game)
-    local cur = self.sim.cur
-    local old = self.lastHead
-    local head = cur[1]
-    if head.x == old.x and head.y == old.y then
-        return
-    end
-    local steps = 1
-    for j = 2, math.min(#cur, 6) do
-        if cur[j].x == old.x and cur[j].y == old.y then
-            steps = j - 1
-            break
-        end
-    end
-    self.moveTicks += steps
-    self.lastHead = { x = head.x, y = head.y }
-end
-
 -- The head's shadow swells and blurs while it lunges or eats, and settles after.
 local function stepShadowLift(self: Game, seconds: number)
     local swelling = self.headState == 'lunge' or self.headState == 'eat'
@@ -684,7 +658,7 @@ local function stepRoomSight(self: Game, seconds: number)
     local now = self.sightRoom
     local intensity = if now ~= nil then self.lights.intensity[Flicker.ROOMS[now].group] else 1
     if now ~= nil and now == room then
-        if self.sightIntensity < 0.2 and intensity > 0.8 then
+        if self.sightIntensity < 0.2 and intensity > 0.8 and Flicker.tryFlash(self.lights) then
             self.flash = 1
         end
     else
@@ -717,7 +691,6 @@ function advance(self: Game, seconds: number): boolean
     local oldHead = { x = sim.cur[1].x, y = sim.cur[1].y }
     local oldTail = { x = sim.cur[#sim.cur].x, y = sim.cur[#sim.cur].y }
     Sim.update(sim, seconds)
-    countMoves(self)
     if sim.bumpTime ~= self.seenBump then
         self.seenBump = sim.bumpTime
         if sim.bumpTime >= 0 then
@@ -1147,10 +1120,11 @@ local function buildBody(pts: { Vector }, taperJoint: number): Body
 end
 
 -- The strip over samples i0..i1 as mesh buffers: two vertices per sample, the
--- snake's left (v = 0) and right (v = 1). Texture coordinates run along the skin,
--- shifted so it keeps its place on the ground as the snake slides over it, or,
--- for the light pass, are the vertex's place in the level.
-local function stripMesh(body: Body, i0: number, i1: number, skinShift: number?): (VertexBuffer, VertexBuffer, TriangleBuffer)
+-- snake's left (v = 0) and right (v = 1). Texture coordinates run along the skin
+-- by arc length from the neck, so every scale keeps its distance from the head
+-- as the body slides along its path, or, for the light pass, are the vertex's
+-- place in the level.
+local function stripMesh(body: Body, i0: number, i1: number, onSkin: boolean): (VertexBuffer, VertexBuffer, TriangleBuffer)
     local vertices = VertexBuffer()
     local uvs = VertexBuffer()
     local triangles = TriangleBuffer()
@@ -1160,8 +1134,8 @@ local function stripMesh(body: Body, i0: number, i1: number, skinShift: number?)
         local lx, ly = body.x[i] + ox, body.y[i] + oy
         local rx, ry = body.x[i] - ox, body.y[i] - oy
         vertices:add(Vector.xy(lx, ly), Vector.xy(rx, ry))
-        if skinShift ~= nil then
-            local u = (body.a[i] - skinShift) / SKIN_LENGTH
+        if onSkin then
+            local u = body.a[i] / SKIN_LENGTH
             uvs:add(Vector.xy(u, 0), Vector.xy(u, 1))
         else
             uvs:add(Vector.xy(lx / WORLD, ly / WORLD), Vector.xy(rx / WORLD, ry / WORLD))
@@ -1227,12 +1201,12 @@ local function drawLight(self: Game, renderer: Renderer, body: Body)
     end
 
     if not flickering then
-        local vertices, uvs, triangles = stripMesh(body, 1, body.n, nil)
+        local vertices, uvs, triangles = stripMesh(body, 1, body.n, false)
         renderer:drawImageMesh(light, self.lightSampler, vertices, uvs, triangles, 'multiply', 1)
         return
     end
     for c, chunk in chunks do
-        local vertices, uvs, triangles = stripMesh(body, chunk[1], chunk[2], nil)
+        local vertices, uvs, triangles = stripMesh(body, chunk[1], chunk[2], false)
         renderer:save()
         renderer:modulateColor(Lighting.color(mults[c], mults[c], mults[c]))
         renderer:drawImageMesh(light, self.lightSampler, vertices, uvs, triangles, 'multiply', 1)
@@ -1240,10 +1214,8 @@ local function drawLight(self: Game, renderer: Renderer, body: Body)
     end
 end
 
--- Shadow, then the skin, then the room light over it. `skinTravel` is how far
--- the head has gone, in px: the skin is anchored to the ground the snake slides
--- over, so a scale never crawls along the body.
-local function drawBody(self: Game, renderer: Renderer, pts: { Vector }, skinTravel: number)
+-- Shadow, then the skin, then the room light over it.
+local function drawBody(self: Game, renderer: Renderer, pts: { Vector })
     local n = #pts
     local tail = math.max(1, math.min(TAIL_SEGMENTS, n - 2))
     local body = buildBody(pts, n - tail)
@@ -1268,7 +1240,7 @@ local function drawBody(self: Game, renderer: Renderer, pts: { Vector }, skinTra
 
     local skin = self.skinImage
     if skin ~= nil then
-        local vertices, uvs, triangles = stripMesh(body, 1, body.n, skinTravel % SKIN_LENGTH)
+        local vertices, uvs, triangles = stripMesh(body, 1, body.n, true)
         renderer:drawImageMesh(skin, self.skinSampler, vertices, uvs, triangles, 'srcOver', 1)
     end
     drawLight(self, renderer, body)
@@ -1362,15 +1334,7 @@ function draw(self: Game, renderer: Renderer)
         pts[i] = lerpCell(sim.prev[i], sim.cur[i], snakeAlpha)
     end
 
-    -- How far the head has gone: a tile for every tick it moved, and part of one
-    -- while it slides through the current tick. `moveTicks` already counts the
-    -- tick in progress when the head is moving in it, so that one is taken off.
-    local first = sim.prev[1]
-    local second = sim.cur[1]
-    local moved = first.x ~= second.x or first.y ~= second.y
-    local skinTravel = if moved then TILE * (self.moveTicks - 1) + snakeAlpha * TILE else TILE * self.moveTicks
-
-    drawBody(self, renderer, pts, skinTravel)
+    drawBody(self, renderer, pts)
 
     -- The head sits on top, its neck on the head point, turned to face the way
     -- the snake is going.
@@ -1444,8 +1408,6 @@ return function(context: Context): Layout<Game>
         seenBump = -1,
         nudgeDistance = 0,
         rings = Fog.newRings(),
-        moveTicks = 0,
-        lastHead = { x = sim.cur[1].x, y = sim.cur[1].y },
         shadowLift = 0,
 
         lights = Flicker.new(20240607),

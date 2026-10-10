@@ -34,6 +34,8 @@ export type Group = {
     jitterLeft: number,
     chase: number, -- the chase jitter's current random draw, 0-1
     chaseLeft: number,
+    below: boolean, -- the level is in a drop below the safe-flashing floor
+    dropAt: number, -- elapsed time at which the last such drop began
 }
 
 export type State = {
@@ -42,6 +44,7 @@ export type State = {
     elapsed: number, -- seconds of play since the last reset
     tension: number, -- chase tension, 0-1
     room: number?, -- index into ROOMS of the room the head is in
+    sinceFlash: number, -- seconds since the last strike flash was allowed
 }
 
 export type Context = {
@@ -250,6 +253,8 @@ local function resetGroup(g: Group)
     g.jitterLeft = 0
     g.chase = 0
     g.chaseLeft = 0
+    g.below = false
+    g.dropAt = -math.huge
 end
 
 function Flicker.new(seed: number): State
@@ -271,12 +276,14 @@ function Flicker.new(seed: number): State
             jitterLeft = 0,
             chase = 0,
             chaseLeft = 0,
+            below = false,
+            dropAt = -math.huge,
         }
         resetGroup(g)
         groups[i] = g
         intensity[i] = 1
     end
-    return { groups = groups, intensity = intensity, elapsed = 0, tension = 0, room = nil }
+    return { groups = groups, intensity = intensity, elapsed = 0, tension = 0, room = nil, sinceFlash = math.huge }
 end
 
 -- A fresh run: every group on, no event running, the quiet time starts over.
@@ -289,6 +296,7 @@ function Flicker.reset(state: State)
     state.elapsed = 0
     state.tension = 0
     state.room = nil
+    state.sinceFlash = math.huge
 end
 
 -- Chase tension: 1 while a guest within range flees, CHASE_LUNGE while lunging,
@@ -313,6 +321,38 @@ local function stepTension(state: State, dt: number, ctx: Context)
     end
     local tau = if target > state.tension then Config.CHASE_RISE else Config.CHASE_FALL
     state.tension += (target - state.tension) * (1 - math.exp(-dt / tau))
+end
+
+-- Safe flashing, the last word on a group's level. A drop below the floor may
+-- only begin if the previous one began at least SAFE_FLASH_INTERVAL ago; until
+-- then the level stops at the floor. Faster flicker (strobe, stutter, chase
+-- jitter) keeps its rhythm and its highs, it just can't go deep, so at most 3
+-- deep flashes a second get through. A drop already under way is left to finish.
+local function limitFlashing(g: Group, level: number, t: number): number
+    local floor = Config.SAFE_FLASH_FLOOR
+    if level >= floor then
+        g.below = false
+        return level
+    end
+    if g.below then
+        return level
+    end
+    if t - g.dropAt >= Config.SAFE_FLASH_INTERVAL then
+        g.below = true
+        g.dropAt = t
+        return level
+    end
+    return floor
+end
+
+-- Whether the current room's strike flash may fire now: once per
+-- SAFE_STRIKE_INTERVAL when safe flashing is on.
+function Flicker.tryFlash(state: State): boolean
+    if Config.SAFE_FLASHING and state.sinceFlash < Config.SAFE_STRIKE_INTERVAL then
+        return false
+    end
+    state.sinceFlash = 0
+    return true
 end
 
 local function stepGroup(state: State, g: Group, dt: number, ctx: Context, ownGroup: number)
@@ -381,12 +421,17 @@ local function stepGroup(state: State, g: Group, dt: number, ctx: Context, ownGr
         end
     end
 
-    state.intensity[g.index] = math.clamp(level, 0, 1)
+    level = math.clamp(level, 0, 1)
+    if Config.SAFE_FLASHING then
+        level = limitFlashing(g, level, t)
+    end
+    state.intensity[g.index] = level
 end
 
 -- Advances every group by `dt`. Off the play screen (ready, won, lost) every
 -- group sits at 1.0 and the clock stands still.
 function Flicker.update(state: State, dt: number, ctx: Context)
+    state.sinceFlash += dt
     if not ctx.playing or not Config.FLICKER_ENABLED then
         for i = 1, GROUP_COUNT do
             state.intensity[i] = 1

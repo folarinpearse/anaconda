@@ -224,6 +224,108 @@ return function(): Tests
             end)
         end)
 
+        test.group('safe flashing', function()
+            local FLOOR = Config.SAFE_FLASH_FLOOR
+
+            -- Times at which each group's level began a drop below the floor, and
+            -- how often it sat exactly on the floor (a drop the limiter cut short).
+            local function drops(seed: number, seconds: number, chase: boolean): ({ { number } }, number, number)
+                local state = Flicker.new(seed)
+                local c = ctx(3, 12) -- kitchen: the dj_room is within range, so chase jitter runs there
+                c.forceEvents = true
+                c.forceChase = chase
+                local starts: { { number } } = {}
+                local previous: { number } = {}
+                for g = 1, Flicker.GROUP_COUNT do
+                    starts[g] = {}
+                    previous[g] = 1
+                end
+                local clamped = 0
+                local highs = 0
+                run(state, seconds, c, function()
+                    for g = 1, Flicker.GROUP_COUNT do
+                        local level = state.intensity[g]
+                        if level < FLOOR and previous[g] >= FLOOR then
+                            table.insert(starts[g], state.elapsed)
+                        end
+                        if g == 1 then
+                            if math.abs(level - FLOOR) < 1e-9 then
+                                clamped += 1
+                            elseif level > 0.9 then
+                                highs += 1
+                            end
+                        end
+                        previous[g] = level
+                    end
+                end)
+                return starts, clamped, highs
+            end
+
+            local function spacingOk(starts: { { number } }): boolean
+                for _, list in starts do
+                    for i = 2, #list do
+                        -- a frame of slack: levels are sampled at 60 fps
+                        if list[i] - list[i - 1] < Config.SAFE_FLASH_INTERVAL - DT then
+                            return false
+                        end
+                    end
+                end
+                return true
+            end
+
+            test.case('no group starts a deep drop more than every third of a second', function(expect)
+                for seed = 1, 4 do
+                    local starts = drops(seed, 60, false)
+                    expect(spacingOk(starts)).is(true)
+                    expect(#starts[1]).greaterThan(10) -- the strobe still gets its drops through
+                end
+            end)
+
+            test.case('the same in a chase, with its jitter on top', function(expect)
+                for seed = 1, 4 do
+                    expect(spacingOk((drops(seed, 60, true)))).is(true)
+                end
+            end)
+
+            test.case('the strobe keeps its rhythm: it flips between the floor and near full', function(expect)
+                local _, clamped, highs = drops(1, 60, false)
+                expect(clamped).greaterThan(20) -- frames held at the floor
+                expect(highs).greaterThan(20) -- and frames near full
+            end)
+
+            test.case('with it off the strobe drops as often as it likes', function(expect)
+                Config.SAFE_FLASHING = false
+                local starts = drops(1, 60, false)
+                Config.SAFE_FLASHING = true
+                expect(spacingOk(starts)).is(false)
+            end)
+
+            test.case('a long blackout is one drop and goes all the way down', function(expect)
+                local state = Flicker.new(1)
+                local c = ctx(3, 12)
+                c.forceEvents = true
+                local lowest = 1.0
+                run(state, 60, c, function()
+                    lowest = math.min(lowest, state.intensity[4])
+                end)
+                expect(lowest).lessThan(0.1)
+            end)
+
+            test.case('the strike flash fires at most once every half second', function(expect)
+                local state = Flicker.new(1)
+                expect(Flicker.tryFlash(state)).is(true)
+                expect(Flicker.tryFlash(state)).is(false)
+                Flicker.update(state, 0.49, ctx(CORRIDOR.x, CORRIDOR.y))
+                expect(Flicker.tryFlash(state)).is(false)
+                Flicker.update(state, 0.02, ctx(CORRIDOR.x, CORRIDOR.y))
+                expect(Flicker.tryFlash(state)).is(true)
+                Config.SAFE_FLASHING = false
+                expect(Flicker.tryFlash(state)).is(true)
+                expect(Flicker.tryFlash(state)).is(true)
+                Config.SAFE_FLASHING = true
+            end)
+        end)
+
         test.group('lighting', function()
             test.case('all lights on leaves the flicker multiplier at 1', function(expect)
                 Lighting.setIntensities({ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 })

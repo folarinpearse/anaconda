@@ -54,6 +54,14 @@
                 </TextStylePaint>
                 <TextValueRun styleId="0:759" text="Click or press Space to start" name="Run" id="0:762"/>
             </Text>
+            <Text originX="0.5" originY="0.5" x="480" y="700" name="Ready Notice" id="0:915">
+                <TextStylePaint fontSize="16" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:916">
+                    <Fill name="Fill" id="0:917">
+                        <SolidColor colorValue="FF9099A8" name="Color" id="0:918"/>
+                    </Fill>
+                </TextStylePaint>
+                <TextValueRun styleId="0:916" text="Contains flickering lights." name="Run" id="0:919"/>
+            </Text>
             <DataBindContext sourcePathIds="0:100-0:704" propertyKey="18" id="0:764"/>
         </Node>
         <Node opacity="0" name="Cleared Screen" id="0:770">
