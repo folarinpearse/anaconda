@@ -19,6 +19,28 @@ local Lighting = {}
 local GROUPS = #FlickerMask.groups
 local ON = 0.999 -- an intensity above this is as good as on
 
+-- The data files hold their bytes as hex strings, 2 characters per byte. Each is
+-- decoded once, here, into a buffer of one byte per value; `stride` values per
+-- sample, size x size samples, so a string of the wrong length is an error now,
+-- not a wrong light later.
+local function decodeHex(hex: string, size: number, stride: number): buffer
+    local count = size * size * stride
+    assert(#hex == count * 2, `expected ${count * 2} hex characters, got ${#hex}`)
+    local data = buffer.create(count)
+    for i = 0, count - 1 do
+        local hi = string.byte(hex, i * 2 + 1)
+        local lo = string.byte(hex, i * 2 + 2)
+        -- 0-9 are 48-57, a-f are 97-102, A-F are 65-70.
+        hi = if hi <= 57 then hi - 48 elseif hi >= 97 then hi - 87 else hi - 55
+        lo = if lo <= 57 then lo - 48 elseif lo >= 97 then lo - 87 else lo - 55
+        buffer.writeu8(data, i, hi * 16 + lo)
+    end
+    return data
+end
+
+local lightRgbBytes = decodeHex(LightMap.rgb, LightMap.size, 3)
+local flickerLossBytes = decodeHex(FlickerMask.loss, FlickerMask.size, GROUPS)
+
 -- The intensity of each light group, 0-1; main.luau sets it every frame from
 -- flicker.luau. All on until then.
 local intensity: { number } = {}
@@ -45,11 +67,13 @@ local function footprint(size: number, perTile: number, x: number, y: number): (
     return math.clamp(x0, 0, last), math.clamp(x0 + 1, 0, last), math.clamp(y0, 0, last), math.clamp(y0 + 1, 0, last), fx, fy
 end
 
-local function bilinear(data: { number }, size: number, stride: number, channel: number, c0: number, c1: number, r0: number, r1: number, fx: number, fy: number): number
-    local a = data[(r0 * size + c0) * stride + channel]
-    local b = data[(r0 * size + c1) * stride + channel]
-    local c = data[(r1 * size + c0) * stride + channel]
-    local d = data[(r1 * size + c1) * stride + channel]
+-- `channel` counts from 1: byte (row * size + col) * stride + channel, 1-based,
+-- which is that minus one in the buffer.
+local function bilinear(data: buffer, size: number, stride: number, channel: number, c0: number, c1: number, r0: number, r1: number, fx: number, fy: number): number
+    local a = buffer.readu8(data, (r0 * size + c0) * stride + channel - 1)
+    local b = buffer.readu8(data, (r0 * size + c1) * stride + channel - 1)
+    local c = buffer.readu8(data, (r1 * size + c0) * stride + channel - 1)
+    local d = buffer.readu8(data, (r1 * size + c1) * stride + channel - 1)
     return (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy
 end
 
@@ -60,7 +84,7 @@ function Lighting.flickerMult(x: number, y: number): number
     for g = 1, GROUPS do
         local i = intensity[g]
         if i < ON then
-            local share = bilinear(FlickerMask.loss, size, GROUPS, g, c0, c1, r0, r1, fx, fy) / 255
+            local share = bilinear(flickerLossBytes, size, GROUPS, g, c0, c1, r0, r1, fx, fy) / 255
             mult *= 1 - share * (1 - i)
         end
     end
@@ -72,10 +96,9 @@ end
 function Lighting.baseLight(x: number, y: number): (number, number, number)
     local size = LightMap.size
     local c0, c1, r0, r1, fx, fy = footprint(size, LightMap.perTile, x, y)
-    local rgb = LightMap.rgb
-    return bilinear(rgb, size, 3, 1, c0, c1, r0, r1, fx, fy) / 255,
-        bilinear(rgb, size, 3, 2, c0, c1, r0, r1, fx, fy) / 255,
-        bilinear(rgb, size, 3, 3, c0, c1, r0, r1, fx, fy) / 255
+    return bilinear(lightRgbBytes, size, 3, 1, c0, c1, r0, r1, fx, fy) / 255,
+        bilinear(lightRgbBytes, size, 3, 2, c0, c1, r0, r1, fx, fy) / 255,
+        bilinear(lightRgbBytes, size, 3, 3, c0, c1, r0, r1, fx, fy) / 255
 end
 
 -- lightAt as 0-1 channels, for callers that blend it over time.

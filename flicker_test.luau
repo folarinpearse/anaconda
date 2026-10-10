@@ -327,6 +327,33 @@ return function(): Tests
         end)
 
         test.group('lighting', function()
+            -- The data files are hex strings decoded into buffers at load. These
+            -- are what the old number tables gave at the same points (x, y, then the
+            -- base light's r, g, b, then the flicker multiplier with the groups at
+            -- the intensities below), worked out independently of the decoder.
+            test.case('the decoded light and flicker data sample as the old tables did', function(expect)
+                local refs = {
+                { 3.5, 10.25, 0.292156863, 0.417647059, 0.231372549, 0.229843743 },
+                { 12, 12.5, 1.000000000, 0.815686275, 0.323529412, 0.955971584 },
+                { 12, 8, 0.462745098, 0.356862745, 0.524509804, 0.592517566 },
+                { 19.5, 12.5, 0.493137255, 0.851960784, 1.000000000, 0.655266633 },
+                { 7.3, 7.9, 0.164313725, 0.174901961, 0.242745098, 0.982847059 },
+                { -3, -3, 0.160784314, 0.160784314, 0.200000000, 1.000000000 },
+                { 23.9, 23.9, 0.160784314, 0.160784314, 0.200000000, 1.000000000 },
+                { 0.2, 23.9, 0.160784314, 0.160784314, 0.200000000, 1.000000000 },
+                { 12, 3, 0.942156863, 0.765686275, 1.000000000, 0.869720539 },
+                }
+                Lighting.setIntensities({ 1, 0.7, 1, 0.2, 1, 0.5, 1, 1, 0.9, 0.4 })
+                for _, ref in refs do
+                    local r, g, b = Lighting.baseLight(ref[1], ref[2])
+                    expect(math.abs(r - ref[3])).lessThan(0.000001)
+                    expect(math.abs(g - ref[4])).lessThan(0.000001)
+                    expect(math.abs(b - ref[5])).lessThan(0.000001)
+                    expect(math.abs(Lighting.flickerMult(ref[1], ref[2]) - ref[6])).lessThan(0.000001)
+                end
+                Lighting.setIntensities({ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 })
+            end)
+
             test.case('all lights on leaves the flicker multiplier at 1', function(expect)
                 Lighting.setIntensities({ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 })
                 expect(Lighting.flickerMult(3.5, 12.5)).is(1)
