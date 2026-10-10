@@ -57,4 +57,111 @@ return {
     RING_INTERVAL = 1.0, -- seconds between rings from one guest
     RING_LIFETIME = 1.4, -- seconds a ring lasts
     RING_MAX_RADIUS = 2.4, -- tiles
+
+    -- Lights. Every room's lights fail in their own way (flicker.luau). A range
+    -- is { min, max } seconds unless it says otherwise; a gap is the time between
+    -- one event and the next.
+    FLICKER_ENABLED = true, -- false: every group stays at 1.0
+    LIGHTS_QUIET_TIME = 3, -- no events in the first seconds of a run
+    ENTRY_DELAY = { 0.15, 0.5 }, -- a room fires its event this long after the head enters
+
+    -- dj_room "party": base pulses to the beat, events are strobe bursts
+    PARTY_BPM = 120,
+    PARTY_BASE_LOW = 0.6, -- base = low + (1 - low) * exp(-decay * beat phase)
+    PARTY_BASE_DECAY = 6,
+    PARTY_GAP = { 3, 7 },
+    PARTY_STROBE_SEGMENTS = { 10, 16 }, -- a count, not seconds
+    PARTY_STROBE_SEGMENT = 0.045,
+    PARTY_STROBE_LOW = 0.05,
+
+    -- lounge "dimmer": slow swell, events are a fade down and back
+    LOUNGE_BASE_MID = 0.82,
+    LOUNGE_BASE_SWING = 0.18,
+    LOUNGE_BASE_PERIOD = 4,
+    LOUNGE_GAP = { 6, 12 },
+    LOUNGE_FADE_TO = 0.2,
+    LOUNGE_FADE_TIME = 0.6, -- down, and again back up
+    LOUNGE_HOLD = 0.3,
+
+    -- bar "neon": base jitters, events are a cut-out
+    NEON_JITTER = 0.12, -- base = 1 - jitter * random
+    NEON_JITTER_INTERVAL = { 0.02, 0.06 },
+    NEON_GAP = { 2, 6 },
+    NEON_OFF_LEVEL = 0.05,
+    NEON_CUT_FIRST = 0.08,
+    NEON_CUT_ON = 0.04,
+    NEON_CUT_SECOND = { 0.1, 0.3 },
+
+    -- kitchen, corridors and bathroom, the tubes: a faint hum, events are a
+    -- stutter or a blackout (a stutter, off, a stutter)
+    TUBE_HUM = 0.015, -- +- share of the base level
+    TUBE_STUTTER_SEGMENTS = { 4, 8 }, -- a count, not seconds
+    TUBE_STUTTER_SEGMENT = { 0.03, 0.09 },
+    TUBE_STUTTER_LOW = { 0.03, 0.2 }, -- levels, not seconds
+    TUBE_STUTTER_HIGH = { 0.8, 1 },
+    TUBE_OFF_LEVEL = 0.03,
+    KITCHEN_GAP = { 5, 12 },
+    KITCHEN_BLACKOUT_SHARE = 0.4, -- of events
+    KITCHEN_BLACKOUT_TIME = { 1.5, 3 },
+    CORRIDORS_GAP = { 8, 20 },
+    CORRIDORS_BLACKOUT_SHARE = 0.4,
+    CORRIDORS_BLACKOUT_TIME = { 1, 1.5 }, -- never longer than 1.5
+    BATHROOM_GAP = { 2, 6 }, -- the dying tube
+    BATHROOM_BLACKOUT_SHARE = 0.5,
+    BATHROOM_BLACKOUT_TIME = { 1.5, 3.5 },
+
+    -- main_hall "brownout": events are a sag
+    HALL_GAP = { 8, 16 },
+    HALL_SAG_TO = 0.45,
+    HALL_SAG_TIME = 0.25,
+    HALL_HOLD = 0.2,
+    HALL_RECOVER = 0.4,
+
+    -- games "glitch": tiny jitter, events are a double blink
+    GLITCH_JITTER = 0.02,
+    GLITCH_JITTER_INTERVAL = { 0.04, 0.1 },
+    GLITCH_GAP = { 3, 8 },
+    GLITCH_LOW_LEVEL = 0.1,
+    GLITCH_LOW_TIME = 0.05, -- twice
+    GLITCH_ON_TIME = 0.06,
+
+    -- foyer "sag": events are a slow sag
+    FOYER_GAP = { 8, 16 },
+    FOYER_SAG_TO = 0.5,
+    FOYER_SAG_TIME = 0.8,
+    FOYER_HOLD = 1.0,
+    FOYER_RECOVER = 0.6,
+
+    -- red_room "heartbeat": base follows the dread heartbeat, events are a drop
+    RED_BASE_LOW = 0.55, -- base = low + (1 - low) * Fog.heartbeat(beat phase)
+    RED_GAP = { 9, 15 },
+    RED_DROP_TO = 0.3,
+    RED_DROP_TIME = 0.15,
+
+    -- Chase tension 0-1: how hard the lights are failing because guests are
+    -- running or the snake is lunging.
+    CHASE_RANGE = 7, -- tiles from the head to a fleeing or alerted guest
+    CHASE_FLEE = 1.0, -- target while a guest in range flees
+    CHASE_LUNGE = 0.8, -- target while lunging
+    CHASE_ALERT = 0.6, -- target while a guest in range is alerted
+    CHASE_RISE = 0.3, -- seconds, time constant
+    CHASE_FALL = 2.0,
+    CHASE_GAP_SPEEDUP = 4, -- gaps are divided by 1 + this * tension
+    CHASE_JITTER_RANGE = 8, -- tiles from the head to a room that gets erratic
+    CHASE_JITTER_INTERVAL = { 0.03, 0.08 },
+    CHASE_JITTER_DEPTH = 0.35, -- intensity *= 1 - depth * tension * random
+    CHASE_BLACKOUT_MAX = 1.5, -- a blackout in the snake's own room is cut to this
+    CHASE_ACTIVE = 0.1, -- tension above this counts as a chase
+
+    -- Seeing the room you are in. vision.wgsl repeats ROOM_SIGHT_GAIN, ROOM_SIGHT_FLOOR
+    -- and ROOM_FLASH_GAIN: keep them in step.
+    ROOM_SIGHT_RISE = 0.4, -- seconds to ease in after entering
+    ROOM_SIGHT_FALL = 0.6, -- ...and out after leaving
+    ROOM_SIGHT_GAIN = 0.8, -- light = gain * sight * (floor + (1 - floor) * intensity)
+    ROOM_SIGHT_FLOOR = 0.25,
+    ROOM_FLASH_GAIN = 0.3,
+    ROOM_FLASH_TIME = 0.15, -- seconds for the strike flash to decay
+
+    -- The snake
+    HEAD_LIGHT_TIME = 0.12, -- seconds, time constant of the head's light
 }

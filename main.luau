@@ -8,6 +8,8 @@
 local Sim = require('sim')
 local Config = require('config')
 local Fog = require('fog')
+local Lighting = require('lighting')
+local Flicker = require('flicker')
 local LEVEL = require('level')
 
 type Cell = Sim.Cell
@@ -20,11 +22,16 @@ type PersonRec = {
 -- The values of the SnakeHead artboard's `state` enum (snakehead.rml).
 type HeadState = 'idle' | 'lunge' | 'eat' | 'hit'
 
--- One coat of the body: the stroke that runs down the straight part and the
--- fill that draws the tapered tail in the same colour.
-type BodyLayer = {
-    stroke: Paint,
-    fill: Paint,
+-- The body as samples down its smoothed path, neck first: where it is, how far
+-- along, which way is the snake's left, and how wide.
+type Body = {
+    x: { number },
+    y: { number },
+    a: { number }, -- arc length from the neck, px
+    nx: { number }, -- unit normal pointing to the snake's left
+    ny: { number },
+    hw: { number }, -- half-width
+    n: number,
 }
 
 type Game = {
@@ -36,13 +43,14 @@ type Game = {
     headState: HeadState, -- the state last written to it
     floorImage: Image?, -- art/floor_base.png: the floor plan with walls and lighting baked in
     wallsImage: Image?, -- art/walls_overlay.png: the walls alone, drawn above the guests
+    skinImage: Image?, -- snake_skin.png: the body's scales, 160 px long, tiling along it
+    lightImage: Image?, -- snake_light.png: the room lighting over the whole level, to multiply the body by
+    flickerImage: Image?, -- flicker_mask.png: each light group's share of the light, for the shader
     exitPath: Path,
     exitPaint: Paint,
     shadowPaint: Paint,
-    outlineLayer: BodyLayer,
-    bodyLayer: BodyLayer,
-    spineLayer: BodyLayer,
-    spotPaint: Paint,
+    skinSampler: ImageSampler, -- repeats along the body
+    lightSampler: ImageSampler,
     size: Vector,
     scale: number,
     context: Context?,
@@ -62,6 +70,20 @@ type Game = {
     seenBump: number, -- the sim.bumpTime last looked at, to spot a new bump
     nudgeDistance: number, -- px the head leans on the current bump; 0 = no nudge
     rings: Fog.Rings,
+    moveTicks: number, -- ticks since the start on which the head moved
+    lastHead: Cell, -- the head cell last looked at, to count those
+    shadowLift: number, -- 0-1: the head's shadow swelling while it lunges or eats
+
+    -- lights: flicker.luau's controllers, and what the vision pass and the snake make of them
+    lights: Flicker.State,
+    holdF: boolean, -- debug: F held, every group runs its event back to back
+    holdC: boolean, -- debug: C held, chase tension stuck at 1
+    sight: number, -- 0-1: how far the room the head is in has been taken in
+    sightRoom: number?, -- index into Flicker.ROOMS of that room; kept while it fades out
+    flash: number, -- 1 to 0: the strike flash when that room's lights come back
+    sightIntensity: number, -- that room's intensity last frame, to spot the strike
+    headLight: { number }, -- r, g, b the head is lit by, eased
+    headLightSet: boolean, -- headLight has been seeded
 
     -- the vision pass: scene -> vision.wgsl -> gpu canvas -> drawImage
     scene: Canvas?,
@@ -74,6 +96,8 @@ type Game = {
     maskPath: Path,
     maskPaint: Paint,
     maskDirty: boolean, -- the mask needs drawing (again)
+    flickerCanvas: Canvas?, -- flicker_mask.png drawn into a canvas, which the shader can sample
+    flickerDirty: boolean, -- ...and it needs drawing (again)
     imageSampler: ImageSampler,
     uniforms: buffer,
     gpuDirty: boolean, -- canvases need (re)building for the current size
@@ -97,7 +121,7 @@ type Game = {
 }
 
 local TILE = 40
-local BODY_WIDTH = 30
+local WORLD = TILE * #LEVEL[1] -- px across the (square) level
 local KAPPA = 0.5522847498
 local PERSON_SIZE = 32
 
@@ -105,23 +129,38 @@ local PERSON_SIZE = 32
 -- keep these in step with the `Rig` node in snakehead.rml.
 local HEAD_NECK_X = 12
 local HEAD_NECK_Y = 24
-local EAT_TIME = 0.25 -- seconds the head shows its eat animation after a meal
+local EAT_TIME = 0.5 -- seconds the head shows its eat animation after a meal (30 frames)
 local TURN_FRACTION = 0.6 -- share of a tick the head takes to swing round to a new heading
 
--- The body: lit from straight above, so every coat runs down the middle.
+-- The body is one textured strip down the smoothed path of the joints. It is
+-- BODY_HALF_WIDTH to either side at full width, narrows to NECK_HALF just behind
+-- the head (the head art's back edge) and widens to full over NECK_GROW, and
+-- tapers to a point over the last TAIL_SEGMENTS segments.
+local BODY_HALF_WIDTH = 17
+local NECK_HALF = 11
+local NECK_GROW_FROM = 6 -- arc length from the neck where it starts to widen,
+local NECK_GROW_TO = 46 -- and where it is full width: about a tile back
+local TAIL_SEGMENTS = 3
+local SKIN_LENGTH = 160 -- game px of snake_skin.png before it repeats
+local FILLET = TILE / 2 -- radius of every rounded corner
+local FILLET_STEPS = 8
+local RUN_STEP = 10 -- px between samples on a straight run
+local LIGHT_CHUNK = TILE -- the light pass is cut into pieces about this long
+
+-- The body is lit from straight above and casts a shadow, which the head's
+-- lunge and eat swell and blur.
 local SHADOW_DX = 3
 local SHADOW_DY = 4
+local SHADOW_LIFT_DX = 6
+local SHADOW_LIFT_DY = 8
 local SHADOW_ALPHA = 89 -- 35% of 255
 local SHADOW_FEATHER = 3 -- px of blur on the shadow's edge
-local OUTLINE_GROW = 4 -- the outline stroke is this much wider than the body
-local SPINE_FRACTION = 0.35 -- the highlight's width as a share of the body's
-local TAIL_SEGMENTS = 3 -- how many segments at the end taper to a point
-local SPOT_SPACING = TILE -- arc length between spots; must divide TILE so the pattern rides the body
-local SPOT_FIRST = 24 -- arc length from the neck to the first spot at the start of a tick
-local SPOT_ALONG = 7 -- half the spot's length, along the body
-local SPOT_ACROSS = 9 -- half its width, across the body
-local SPOT_GROW_FROM = 8 -- spots swell from nothing between these two arc lengths from the neck,
-local SPOT_GROW_LEN = 14 -- so they appear from under the head instead of popping in
+local SHADOW_LIFT_FEATHER = 6
+local SHADOW_LIFT_TIME = 0.08 -- seconds to swell, and again to settle
+local HEAD_SHADOW_AHEAD = 16 -- px from the neck to the head's shadow
+local HEAD_SHADOW_ALONG = 22 -- its half-length along the heading,
+local HEAD_SHADOW_ACROSS = 20 -- and across it
+local HEAD_LIGHT_AHEAD = 16 -- px from the neck to where the head's light is read
 
 -- GLFW key codes -> direction.
 local KEY_DIRS: { [number]: Cell } = {
@@ -131,6 +170,8 @@ local KEY_DIRS: { [number]: Cell } = {
     [265] = Sim.UP, [87] = Sim.UP, -- up arrow, W
 }
 local KEY_SPACE = 32
+local KEY_F = 70 -- debug: held, every light group runs its event back to back
+local KEY_C = 67 -- debug: held, chase tension is 1
 local KEY_SHIFTS: { [number]: boolean } = { [340] = true, [344] = true } -- left, right
 local SHAKE_AMPLITUDE = 5 -- px at the moment of impact
 -- px the drawn head leans into a bump, at its peak. Interior wall art sits back
@@ -140,7 +181,7 @@ local NUDGE_BORDER = 1 -- outer border tiles
 local NUDGE_OUT_TIME = 0.06 -- seconds to ease out to the peak
 local NUDGE_BACK_TIME = 0.2 -- seconds to spring back
 local BACKGROUND = Color.rgb(20, 23, 28) -- the artboard fill, behind the letterbox
-local UNIFORM_SIZE = 96 -- bytes; the Uniforms struct in vision.wgsl
+local UNIFORM_SIZE = 176 -- bytes; the Uniforms struct in vision.wgsl
 local TURN_SPEED = 14 -- how fast the cone swings round to a new heading, per second
 local PI = math.pi
 
@@ -334,6 +375,11 @@ local function restart(self: Game)
     self.people = {}
     Sim.reset(self.sim, 'playing')
     self.rings = Fog.newRings()
+    Flicker.reset(self.lights)
+    self.sight = 0
+    self.sightRoom = nil
+    self.flash = 0
+    self.sightIntensity = 1
     self.dirAngle = 0 -- the snake starts facing right
     local dir = self.sim.dir
     local facing = math.atan2(dir.y, dir.x)
@@ -342,6 +388,9 @@ local function restart(self: Game)
     self.turnFrom = facing
     self.turnTo = facing
     self.seenEaten = 0
+    self.moveTicks = 0
+    self.lastHead = { x = self.sim.cur[1].x, y = self.sim.cur[1].y }
+    self.shadowLift = 0
     self.eatUntil = -1
     self.beatPhase = 0
     self.sinceEnd = 0
@@ -365,6 +414,12 @@ function init(self: Game, context: Context): boolean
     self.wallsImage = context:image('walls_overlay')
     if self.floorImage == nil or self.wallsImage == nil then
         print('playfield art not found: floor_base / walls_overlay')
+    end
+    self.skinImage = context:image('snake_skin')
+    self.lightImage = context:image('snake_light')
+    self.flickerImage = context:image('flicker_mask')
+    if self.skinImage == nil or self.lightImage == nil or self.flickerImage == nil then
+        print('lighting art not found: snake_skin / snake_light / flicker_mask')
     end
     local vm = context:viewModel()
     if vm == nil then
@@ -403,6 +458,15 @@ function resize(self: Game, size: Vector, scale: number)
 end
 
 function keyboardEvent(self: Game, event: KeyboardEvent): boolean
+    if event.key == KEY_F or event.key == KEY_C then
+        local held = event.phase ~= 'up'
+        if event.key == KEY_F then
+            self.holdF = held
+        else
+            self.holdC = held
+        end
+        return true
+    end
     if event.phase ~= 'down' then
         return false
     end
@@ -566,11 +630,94 @@ local function syncHead(self: Game, seconds: number)
     self.faceAngle = lerpAngle(self.turnFrom, self.turnTo, smoothstep(swing))
 end
 
+-- Counts the ticks on which the head moved, for the skin. A frame can span
+-- several (a lunge, a slow frame): the head's old cell is found among the new
+-- body cells, which trail the head's route, and its depth there is the number of
+-- steps. When it is not there (the snake swapped ends) it counts as one.
+local function countMoves(self: Game)
+    local cur = self.sim.cur
+    local old = self.lastHead
+    local head = cur[1]
+    if head.x == old.x and head.y == old.y then
+        return
+    end
+    local steps = 1
+    for j = 2, math.min(#cur, 6) do
+        if cur[j].x == old.x and cur[j].y == old.y then
+            steps = j - 1
+            break
+        end
+    end
+    self.moveTicks += steps
+    self.lastHead = { x = head.x, y = head.y }
+end
+
+-- The head's shadow swells and blurs while it lunges or eats, and settles after.
+local function stepShadowLift(self: Game, seconds: number)
+    local swelling = self.headState == 'lunge' or self.headState == 'eat'
+    local target = if swelling then 1 else 0
+    local step = seconds / SHADOW_LIFT_TIME
+    if self.shadowLift < target then
+        self.shadowLift = math.min(target, self.shadowLift + step)
+    else
+        self.shadowLift = math.max(target, self.shadowLift - step)
+    end
+end
+
+-- The room the head is in comes into view over ROOM_SIGHT_RISE and goes again
+-- over ROOM_SIGHT_FALL after the head leaves it; the room's rect is kept while
+-- it fades. When that room's lights come back from out to on, it flashes.
+local function stepRoomSight(self: Game, seconds: number)
+    local room = self.lights.room
+    local shown = self.sightRoom
+    if room ~= nil and (shown == nil or shown == room) then
+        self.sightRoom = room
+        self.sight = math.min(1, self.sight + seconds / Config.ROOM_SIGHT_RISE)
+    else
+        self.sight = math.max(0, self.sight - seconds / Config.ROOM_SIGHT_FALL)
+        if self.sight <= 0 then
+            self.sightRoom = nil
+        end
+    end
+
+    self.flash = math.max(0, self.flash - seconds / Config.ROOM_FLASH_TIME)
+    local now = self.sightRoom
+    local intensity = if now ~= nil then self.lights.intensity[Flicker.ROOMS[now].group] else 1
+    if now ~= nil and now == room then
+        if self.sightIntensity < 0.2 and intensity > 0.8 then
+            self.flash = 1
+        end
+    else
+        self.flash = 0 -- only the room you are in ever flashes
+    end
+    self.sightIntensity = intensity
+end
+
+-- The head is lit by the room's light 16 px ahead of the neck, eased so a
+-- room's lights failing dims it over a moment rather than in one frame.
+local function stepHeadLight(self: Game, seconds: number)
+    local hx, hy = headTile(self.sim)
+    local x = hx + math.cos(self.faceAngle) * HEAD_LIGHT_AHEAD / TILE
+    local y = hy + math.sin(self.faceAngle) * HEAD_LIGHT_AHEAD / TILE
+    local r, g, b = Lighting.lightRgb(x, y)
+    local light = self.headLight
+    if not self.headLightSet then
+        self.headLightSet = true
+        light[1], light[2], light[3] = r, g, b
+        return
+    end
+    local k = 1 - math.exp(-seconds / Config.HEAD_LIGHT_TIME)
+    light[1] += (r - light[1]) * k
+    light[2] += (g - light[2]) * k
+    light[3] += (b - light[3]) * k
+end
+
 function advance(self: Game, seconds: number): boolean
     local sim = self.sim
     local oldHead = { x = sim.cur[1].x, y = sim.cur[1].y }
     local oldTail = { x = sim.cur[#sim.cur].x, y = sim.cur[#sim.cur].y }
     Sim.update(sim, seconds)
+    countMoves(self)
     if sim.bumpTime ~= self.seenBump then
         self.seenBump = sim.bumpTime
         if sim.bumpTime >= 0 then
@@ -585,6 +732,7 @@ function advance(self: Game, seconds: number): boolean
     local liveSeconds = if live then seconds else 0
     syncPeople(self, liveSeconds)
     syncHead(self, liveSeconds)
+    stepShadowLift(self, seconds)
     publish(self)
 
     if sim.state == 'won' or sim.state == 'lost' then
@@ -597,6 +745,22 @@ function advance(self: Game, seconds: number): boolean
     -- Presentation clocks.
     self.elapsed += liveSeconds
     self.beatPhase = (self.beatPhase + liveSeconds * Fog.beatRate(sim.vision)) % 1
+
+    -- The lights: every group's intensity, the room in view, the head's light.
+    local lx, ly = headTile(sim)
+    Flicker.update(self.lights, liveSeconds, {
+        playing = live,
+        headX = lx,
+        headY = ly,
+        lunging = sim.lungeLeft > 0,
+        guests = sim.guests,
+        beatPhase = self.beatPhase,
+        forceEvents = self.holdF,
+        forceChase = self.holdC,
+    })
+    Lighting.setIntensities(self.lights.intensity)
+    stepRoomSight(self, seconds)
+    stepHeadLight(self, seconds)
 
     -- Swing the cone round to the new heading rather than snapping.
     local target = math.atan2(sim.dir.y, sim.dir.x)
@@ -613,7 +777,20 @@ function advance(self: Game, seconds: number): boolean
         end
         Fog.stepRings(self.rings, sim.guests, function(g: any)
             local guest = g :: Sim.Guest
-            return Fog.inView(hx, hy, dx, dy, sim.vision, sim.reveal, guest.cell.x + 0.5, guest.cell.y + 0.5, isWall)
+            if Fog.inView(hx, hy, dx, dy, sim.vision, sim.reveal, guest.cell.x + 0.5, guest.cell.y + 0.5, isWall) then
+                return true
+            end
+            -- A guest in the room the snake is in is seen while the room is lit.
+            local shown = self.sightRoom
+            if shown ~= nil then
+                local room = Flicker.ROOMS[shown]
+                local inside = guest.cell.x >= room.x0
+                    and guest.cell.x <= room.x1
+                    and guest.cell.y >= room.y0
+                    and guest.cell.y <= room.y1
+                return inside and Fog.roomSeen(smoothstep(self.sight), self.lights.intensity[room.group])
+            end
+            return false
         end, seconds)
     else
         self.rings = Fog.newRings()
@@ -679,10 +856,30 @@ local function buildGpu(self: Game)
         self.mask = mask
         self.maskDirty = true
     end
+    -- A view taken straight from an image asset samples as zeros, so the light
+    -- groups' mask goes through a canvas too. Black (no group provides any of the
+    -- light) until it is drawn, which leaves every room unaffected.
+    local flickerCanvas: Canvas
+    local existingFlicker = self.flickerCanvas
+    if existingFlicker ~= nil then
+        flickerCanvas = existingFlicker
+    else
+        local image = self.flickerImage
+        flickerCanvas = context:canvas({
+            width = if image ~= nil then image.width else 768,
+            height = if image ~= nil then image.height else 192,
+        })
+        self.flickerCanvas = flickerCanvas
+        self.flickerDirty = true
+    end
     self.bind = GPUBindGroup.new({
         layout = pipeline:getBindGroupLayout(0),
         ubos = { { slot = 0, buffer = self.ubo :: GPUBuffer } },
-        textures = { { slot = 1, view = scene.image:view() }, { slot = 3, view = mask.image:view() } },
+        textures = {
+            { slot = 1, view = scene.image:view() },
+            { slot = 3, view = mask.image:view() },
+            { slot = 4, view = flickerCanvas.image:view() },
+        },
         samplers = { { slot = 2, sampler = self.gpuSampler :: GPUSampler } },
     })
     self.gpuDirty = false
@@ -699,6 +896,17 @@ local function drawMask(self: Game)
     r:restore()
     mask:endFrame()
     self.maskDirty = false
+end
+
+local function drawFlickerMask(self: Game)
+    local canvas = self.flickerCanvas :: Canvas
+    local r = canvas:beginFrame({ clearColor = Color.rgb(0, 0, 0) })
+    local image = self.flickerImage
+    if image ~= nil then
+        r:drawImage(image, self.imageSampler, 'srcOver', 1)
+    end
+    canvas:endFrame()
+    self.flickerDirty = false
 end
 
 -- Fills the shader's Uniforms struct (layout in vision.wgsl).
@@ -738,6 +946,37 @@ local function writeUniforms(self: Game, ox: number, oy: number, pxPerTile: numb
     buffer.writef32(b, 84, sim.rows)
     buffer.writef32(b, 88, 0)
     buffer.writef32(b, 92, 0)
+
+    -- Light group intensities, in the order of the mask atlas.
+    local intensity = self.lights.intensity
+    for g = 1, Flicker.GROUP_COUNT do
+        buffer.writef32(b, 96 + (g - 1) * 4, intensity[g])
+    end
+    buffer.writef32(b, 136, 0)
+    buffer.writef32(b, 140, 0)
+
+    -- The room in view: its rect in tiles, half a tile wider all round so its
+    -- own walls are in, and how far it has been taken in. It keeps the last room's
+    -- rect while that fades out.
+    local shown = self.sightRoom
+    if shown ~= nil then
+        local room = Flicker.ROOMS[shown]
+        buffer.writef32(b, 144, room.x0 - 0.5)
+        buffer.writef32(b, 148, room.y0 - 0.5)
+        buffer.writef32(b, 152, room.x1 + 1.5)
+        buffer.writef32(b, 156, room.y1 + 1.5)
+        buffer.writef32(b, 160, smoothstep(self.sight))
+        buffer.writef32(b, 164, self.flash)
+        buffer.writef32(b, 168, intensity[room.group])
+    else
+        for off = 144, 156, 4 do
+            buffer.writef32(b, off, 0)
+        end
+        buffer.writef32(b, 160, 0)
+        buffer.writef32(b, 164, 0)
+        buffer.writef32(b, 168, 0)
+    end
+    buffer.writef32(b, 172, 0)
     ;(self.ubo :: GPUBuffer):write(b)
 end
 
@@ -786,117 +1025,253 @@ local function drawRings(self: Game, renderer: Renderer)
     end
 end
 
--- The straight part of the body: a polyline through points 1..last.
-local function polyline(pts: { Vector }, last: number): Path
-    local path = Path.new()
-    path:moveTo(pts[1])
-    for i = 2, last do
-        path:lineTo(pts[i])
+-- GLSL smoothstep: 0 below edge0, 1 above edge1, smooth between.
+local function smoothBetween(edge0: number, edge1: number, x: number): number
+    return smoothstep(math.clamp((x - edge0) / (edge1 - edge0), 0, 1))
+end
+
+-- Samples down the body's path, neck first, with the corners rounded. `pts` are
+-- the joints, head first. Every corner becomes a quadratic fillet from FILLET px
+-- before the joint to FILLET px after it, the joint as its control point, in
+-- FILLET_STEPS steps (less where the segments are shorter than twice that, so
+-- neighbouring fillets never overlap); straight runs get a sample every
+-- RUN_STEP px. `taperJoint` is the joint where the tail starts to narrow.
+local function buildBody(pts: { Vector }, taperJoint: number): Body
+    -- Joints that sit on the one before have no direction: leave them out.
+    local jx: { number } = {}
+    local jy: { number } = {}
+    local joint: { number } = {} -- for each of `pts`, its place in jx / jy
+    local m = 0
+    for i, p in pts do
+        if m == 0 or (p.x - jx[m]) ^ 2 + (p.y - jy[m]) ^ 2 > 0.01 then
+            m += 1
+            jx[m] = p.x
+            jy[m] = p.y
+        end
+        joint[i] = m
     end
+
+    -- Each segment's length and unit direction.
+    local len: { number } = {}
+    local dx: { number } = {}
+    local dy: { number } = {}
+    for k = 1, m - 1 do
+        local sx = jx[k + 1] - jx[k]
+        local sy = jy[k + 1] - jy[k]
+        len[k] = math.sqrt(sx * sx + sy * sy)
+        dx[k] = sx / len[k]
+        dy[k] = sy / len[k]
+    end
+
+    local x: { number } = {}
+    local y: { number } = {}
+    local at: { number } = {} -- sample index at each joint (the middle of a fillet)
+    local n = 0
+    local lastX, lastY = jx[1], jy[1]
+    local function emit(px: number, py: number)
+        n += 1
+        x[n] = px
+        y[n] = py
+        lastX, lastY = px, py
+    end
+    local function run(toX: number, toY: number)
+        local fromX, fromY = lastX, lastY
+        local length = math.sqrt((toX - fromX) ^ 2 + (toY - fromY) ^ 2)
+        if length < 0.01 then
+            return
+        end
+        local steps = math.ceil(length / RUN_STEP)
+        for s = 1, steps do
+            emit(fromX + (toX - fromX) * s / steps, fromY + (toY - fromY) * s / steps)
+        end
+    end
+
+    emit(jx[1], jy[1])
+    at[1] = 1
+    for k = 2, m do
+        local cornerR = 0.0
+        if k < m then
+            local cross = dx[k - 1] * dy[k] - dy[k - 1] * dx[k]
+            local dot = dx[k - 1] * dx[k] + dy[k - 1] * dy[k]
+            if math.abs(cross) > 0.001 or dot < 0 then
+                cornerR = math.min(FILLET, len[k - 1] / 2, len[k] / 2)
+            end
+        end
+        if cornerR > 0.01 then
+            local ax, ay = jx[k] - dx[k - 1] * cornerR, jy[k] - dy[k - 1] * cornerR
+            local bx, by = jx[k] + dx[k] * cornerR, jy[k] + dy[k] * cornerR
+            run(ax, ay)
+            for s = 1, FILLET_STEPS do
+                local t = s / FILLET_STEPS
+                local u = 1 - t
+                emit(u * u * ax + 2 * u * t * jx[k] + t * t * bx, u * u * ay + 2 * u * t * jy[k] + t * t * by)
+                if s == FILLET_STEPS // 2 then
+                    at[k] = n
+                end
+            end
+        else
+            run(jx[k], jy[k])
+            at[k] = n
+        end
+    end
+
+    -- Arc length from the neck, and which way each sample faces. The path runs
+    -- neck to tail, so the snake's left is the tangent turned the other way.
+    local a: { number } = { 0 }
+    for i = 2, n do
+        a[i] = a[i - 1] + math.sqrt((x[i] - x[i - 1]) ^ 2 + (y[i] - y[i - 1]) ^ 2)
+    end
+    local nx: { number } = {}
+    local ny: { number } = {}
+    for i = 1, n do
+        local tx = x[math.min(i + 1, n)] - x[math.max(i - 1, 1)]
+        local ty = y[math.min(i + 1, n)] - y[math.max(i - 1, 1)]
+        local tl = math.sqrt(tx * tx + ty * ty)
+        if tl < 0.0001 then
+            nx[i], ny[i] = 0, -1
+        else
+            nx[i], ny[i] = -ty / tl, tx / tl
+        end
+    end
+
+    -- Half-width: full, narrowed behind the head, and tapered to a point at the tip.
+    local taperFrom = a[at[joint[taperJoint]]]
+    local span = math.max(0.001, a[n] - taperFrom)
+    local hw: { number } = {}
+    for i = 1, n do
+        local neck = NECK_HALF + (BODY_HALF_WIDTH - NECK_HALF) * smoothBetween(NECK_GROW_FROM, NECK_GROW_TO, a[i])
+        local tail = if a[i] <= taperFrom then 1 else math.max(0, 1 - (a[i] - taperFrom) / span)
+        hw[i] = neck * tail
+    end
+    return { x = x, y = y, a = a, nx = nx, ny = ny, hw = hw, n = n }
+end
+
+-- The strip over samples i0..i1 as mesh buffers: two vertices per sample, the
+-- snake's left (v = 0) and right (v = 1). Texture coordinates run along the skin,
+-- shifted so it keeps its place on the ground as the snake slides over it, or,
+-- for the light pass, are the vertex's place in the level.
+local function stripMesh(body: Body, i0: number, i1: number, skinShift: number?): (VertexBuffer, VertexBuffer, TriangleBuffer)
+    local vertices = VertexBuffer()
+    local uvs = VertexBuffer()
+    local triangles = TriangleBuffer()
+    for i = i0, i1 do
+        local ox = body.nx[i] * body.hw[i]
+        local oy = body.ny[i] * body.hw[i]
+        local lx, ly = body.x[i] + ox, body.y[i] + oy
+        local rx, ry = body.x[i] - ox, body.y[i] - oy
+        vertices:add(Vector.xy(lx, ly), Vector.xy(rx, ry))
+        if skinShift ~= nil then
+            local u = (body.a[i] - skinShift) / SKIN_LENGTH
+            uvs:add(Vector.xy(u, 0), Vector.xy(u, 1))
+        else
+            uvs:add(Vector.xy(lx / WORLD, ly / WORLD), Vector.xy(rx / WORLD, ry / WORLD))
+        end
+        if i > i0 then
+            local k = (i - i0) * 2 -- the vertices before this pair
+            triangles:add(k - 1, k, k + 1)
+            triangles:add(k, k + 2, k + 1)
+        end
+    end
+    return vertices, uvs, triangles
+end
+
+-- The body's outline as one filled shape, left edge down and right edge back.
+-- Wound clockwise like addOval, so the head's oval unions with it.
+local function bodyOutline(body: Body): Path
+    local path = Path.new()
+    for i = 1, body.n do
+        local p = Vector.xy(body.x[i] + body.nx[i] * body.hw[i], body.y[i] + body.ny[i] * body.hw[i])
+        if i == 1 then
+            path:moveTo(p)
+        else
+            path:lineTo(p)
+        end
+    end
+    for i = body.n, 1, -1 do
+        path:lineTo(Vector.xy(body.x[i] - body.nx[i] * body.hw[i], body.y[i] - body.ny[i] * body.hw[i]))
+    end
+    path:close()
     return path
 end
 
--- A tapered run of the body, joints first..last: a disc at every joint and a
--- quad down every segment, `radii[j] * scale + grow` wide at joint j. Every
--- contour winds clockwise, so overlaps union instead of cancelling.
-local function addTapered(path: Path, pts: { Vector }, radii: { number }, first: number, last: number, scale: number, grow: number)
-    for j = first, last do
-        local r = radii[j] * scale + grow
-        if r > 0.05 then
-            addCircle(path, pts[j].x, pts[j].y, r)
-        end
-        if j < last then
-            local a = pts[j]
-            local b = pts[j + 1]
-            local dx = b.x - a.x
-            local dy = b.y - a.y
-            local len = math.sqrt(dx * dx + dy * dy)
-            local rb = radii[j + 1] * scale + grow
-            if len > 0.001 and (r > 0.05 or rb > 0.05) then
-                local nx = -dy / len
-                local ny = dx / len
-                path:moveTo(Vector.xy(a.x - nx * r, a.y - ny * r))
-                path:lineTo(Vector.xy(b.x - nx * rb, b.y - ny * rb))
-                path:lineTo(Vector.xy(b.x + nx * rb, b.y + ny * rb))
-                path:lineTo(Vector.xy(a.x + nx * r, a.y + ny * r))
-                path:close()
+-- The light pass: the strip drawn again with snake_light.png, multiplied in. The
+-- image is the room lighting over the whole level, so the body picks up the
+-- colour of whichever room it is in. Where lights are failing, it is cut into
+-- pieces about a tile long, each dimmed by what its spot of the level has left.
+local function drawLight(self: Game, renderer: Renderer, body: Body)
+    local light = self.lightImage
+    if light == nil then
+        return
+    end
+    local chunks: { { number } } = {}
+    local first = 1
+    for i = 2, body.n do
+        if body.a[i] - body.a[first] >= LIGHT_CHUNK or i == body.n then
+            if i == body.n and body.a[i] - body.a[first] < LIGHT_CHUNK / 2 and #chunks > 0 then
+                chunks[#chunks][2] = i -- a stub at the tip rides with the piece before
+            else
+                table.insert(chunks, { first, i })
             end
+            first = i
         end
+    end
+
+    local mults: { number } = {}
+    local flickering = false
+    for c, chunk in chunks do
+        local mid = (chunk[1] + chunk[2]) // 2
+        mults[c] = Lighting.flickerMult(body.x[mid] / TILE, body.y[mid] / TILE)
+        if mults[c] < 0.996 then
+            flickering = true
+        end
+    end
+
+    if not flickering then
+        local vertices, uvs, triangles = stripMesh(body, 1, body.n, nil)
+        renderer:drawImageMesh(light, self.lightSampler, vertices, uvs, triangles, 'multiply', 1)
+        return
+    end
+    for c, chunk in chunks do
+        local vertices, uvs, triangles = stripMesh(body, chunk[1], chunk[2], nil)
+        renderer:save()
+        renderer:modulateColor(Lighting.color(mults[c], mults[c], mults[c]))
+        renderer:drawImageMesh(light, self.lightSampler, vertices, uvs, triangles, 'multiply', 1)
+        renderer:restore()
     end
 end
 
--- Dark ovals at even arc lengths down the body, turned to follow it. They are
--- placed by distance from the neck, shifted by `phase` (how far the head has
--- slid this tick) so the pattern rides along with the skin instead of sitting
--- still while the snake moves under it.
-local function buildSpots(pts: { Vector }, cum: { number }, taperFrom: number, phase: number): Path
-    local spots = Path.new()
+-- Shadow, then the skin, then the room light over it. `skinTravel` is how far
+-- the head has gone, in px: the skin is anchored to the ground the snake slides
+-- over, so a scale never crawls along the body.
+local function drawBody(self: Game, renderer: Renderer, pts: { Vector }, skinTravel: number)
     local n = #pts
-    local total = cum[n]
-    local taperStart = cum[taperFrom]
-    local center = polyline(pts, n):measure()
-    local d = SPOT_FIRST - SPOT_SPACING + phase
-    while d < total do
-        local grow = math.clamp((d - SPOT_GROW_FROM) / SPOT_GROW_LEN, 0, 1)
-        local taper = if d <= taperStart then 1 else 1 - (d - taperStart) / math.max(0.001, total - taperStart)
-        local size = grow * taper
-        if size > 0.25 then
-            local p, t = center:positionAndTangent(d)
-            addOval(spots, p.x, p.y, t.x, t.y, SPOT_ALONG * size, SPOT_ACROSS * size)
-        end
-        d += SPOT_SPACING
-    end
-    return spots
-end
+    local tail = math.max(1, math.min(TAIL_SEGMENTS, n - 2))
+    local body = buildBody(pts, n - tail)
 
--- Shadow, outline, olive, spine highlight, spots: each coat is a stroke down the
--- straight part of the body and a filled taper for the last TAIL_SEGMENTS.
-local function drawBody(self: Game, renderer: Renderer, pts: { Vector }, phase: number)
-    local n = #pts
-    local tail = math.min(TAIL_SEGMENTS, n - 2)
-    local taperFrom = n - tail -- the joint where the taper begins
-
-    -- Arc length from the neck to each joint, and the half-width at each: full
-    -- down to the taper, then falling in a straight line to a point.
-    local cum: { number } = { 0 }
-    for i = 2, n do
-        local dx = pts[i].x - pts[i - 1].x
-        local dy = pts[i].y - pts[i - 1].y
-        cum[i] = cum[i - 1] + math.sqrt(dx * dx + dy * dy)
-    end
-    local radii: { number } = {}
-    local span = math.max(0.001, cum[n] - cum[taperFrom])
-    for i = 1, n do
-        radii[i] = if i <= taperFrom then BODY_WIDTH / 2 else (BODY_WIDTH / 2) * (1 - (cum[i] - cum[taperFrom]) / span)
-    end
-
-    -- The shadow is one filled silhouette, as wide as the outlined body, so its
-    -- 35% black is laid down once however much the pieces overlap; a stroke plus
-    -- a tail would double up where they meet. The head's own shadow is part of it.
-    local shadow = Path.new()
-    addTapered(shadow, pts, radii, 1, n, 1, OUTLINE_GROW / 2)
+    -- The shadow is one filled silhouette, so its 35% black is laid down once
+    -- however much the pieces overlap. The head's own shadow is part of it.
+    local lift = smoothstep(self.shadowLift)
     local face = self.faceAngle
-    addOval(shadow, pts[1].x + math.cos(face) * 8, pts[1].y + math.sin(face) * 8, math.cos(face), math.sin(face), 17, 16)
+    local ahead = Vector.xy(pts[1].x + math.cos(face) * HEAD_SHADOW_AHEAD, pts[1].y + math.sin(face) * HEAD_SHADOW_AHEAD)
+    local shadow = bodyOutline(body)
+    addOval(shadow, ahead.x, ahead.y, math.cos(face), math.sin(face), HEAD_SHADOW_ALONG, HEAD_SHADOW_ACROSS)
+    self.shadowPaint.feather = SHADOW_FEATHER + (SHADOW_LIFT_FEATHER - SHADOW_FEATHER) * lift
     renderer:save()
-    renderer:transform(Mat2D.withTranslation(SHADOW_DX, SHADOW_DY))
+    renderer:transform(
+        Mat2D.withTranslation(
+            SHADOW_DX + (SHADOW_LIFT_DX - SHADOW_DX) * lift,
+            SHADOW_DY + (SHADOW_LIFT_DY - SHADOW_DY) * lift
+        )
+    )
     renderer:drawPath(shadow, self.shadowPaint)
     renderer:restore()
 
-    local coats: { { layer: BodyLayer, scale: number, grow: number } } = {
-        { layer = self.outlineLayer, scale = 1, grow = OUTLINE_GROW / 2 },
-        { layer = self.bodyLayer, scale = 1, grow = 0 },
-        { layer = self.spineLayer, scale = SPINE_FRACTION, grow = 0 },
-    }
-    for _, coat in coats do
-        renderer:drawPath(polyline(pts, taperFrom), coat.layer.stroke)
-        if tail > 0 then
-            local taper = Path.new()
-            addTapered(taper, pts, radii, taperFrom, n, coat.scale, coat.grow)
-            renderer:drawPath(taper, coat.layer.fill)
-        end
+    local skin = self.skinImage
+    if skin ~= nil then
+        local vertices, uvs, triangles = stripMesh(body, 1, body.n, skinTravel % SKIN_LENGTH)
+        renderer:drawImageMesh(skin, self.skinSampler, vertices, uvs, triangles, 'srcOver', 1)
     end
-
-    renderer:drawPath(buildSpots(pts, cum, taperFrom, phase), self.spotPaint)
+    drawLight(self, renderer, body)
 end
 
 function draw(self: Game, renderer: Renderer)
@@ -926,6 +1301,9 @@ function draw(self: Game, renderer: Renderer)
 
         if self.maskDirty then
             drawMask(self)
+        end
+        if self.flickerDirty then
+            drawFlickerMask(self)
         end
 
         -- 1. Only the floor plan, walls, exits and guests go to the offscreen canvas.
@@ -984,14 +1362,15 @@ function draw(self: Game, renderer: Renderer)
         pts[i] = lerpCell(sim.prev[i], sim.cur[i], snakeAlpha)
     end
 
-    -- How far the skin has slid since the tick began: the head covers one tile a
-    -- tick, and only on a tick where it actually moved (not into a wall).
+    -- How far the head has gone: a tile for every tick it moved, and part of one
+    -- while it slides through the current tick. `moveTicks` already counts the
+    -- tick in progress when the head is moving in it, so that one is taken off.
     local first = sim.prev[1]
     local second = sim.cur[1]
     local moved = first.x ~= second.x or first.y ~= second.y
-    local phase = if moved then (snakeAlpha * TILE) % SPOT_SPACING else 0
+    local skinTravel = if moved then TILE * (self.moveTicks - 1) + snakeAlpha * TILE else TILE * self.moveTicks
 
-    drawBody(self, renderer, pts, phase)
+    drawBody(self, renderer, pts, skinTravel)
 
     -- The head sits on top, its neck on the head point, turned to face the way
     -- the snake is going.
@@ -1003,6 +1382,8 @@ function draw(self: Game, renderer: Renderer)
         renderer:transform(Mat2D.withTranslation(hx, hy))
         renderer:transform(Mat2D.withRotation(self.faceAngle))
         renderer:transform(Mat2D.withTranslation(-HEAD_NECK_X, -HEAD_NECK_Y))
+        local light = self.headLight
+        renderer:modulateColor(Lighting.color(light[1], light[2], light[3]))
         head:draw(renderer)
         renderer:restore()
     end
@@ -1026,13 +1407,6 @@ return function(context: Context): Layout<Game>
         end
     end
 
-    local function bodyLayer(thickness: number, color: Color): BodyLayer
-        return {
-            stroke = Paint.with({ style = 'stroke', thickness = thickness, cap = 'round', join = 'round', color = color }),
-            fill = Paint.with({ style = 'fill', color = color }),
-        }
-    end
-
     return {
         person = late(),
         snakeHead = late(),
@@ -1046,11 +1420,12 @@ return function(context: Context): Layout<Game>
         maskPaint = Paint.with({ style = 'fill', color = Color.rgb(255, 255, 255) }),
         exitPath = exitPath,
         exitPaint = Paint.with({ style = 'fill', color = Color.rgb(229, 57, 53) }),
+        skinImage = nil,
+        lightImage = nil,
+        flickerImage = nil,
         shadowPaint = Paint.with({ style = 'fill', color = Color.rgba(0, 0, 0, SHADOW_ALPHA), feather = SHADOW_FEATHER }),
-        outlineLayer = bodyLayer(BODY_WIDTH + OUTLINE_GROW, Color.rgb(34, 42, 18)),
-        bodyLayer = bodyLayer(BODY_WIDTH, Color.rgb(104, 122, 48)),
-        spineLayer = bodyLayer(BODY_WIDTH * SPINE_FRACTION, Color.rgb(152, 172, 86)),
-        spotPaint = Paint.with({ style = 'fill', color = Color.rgb(50, 62, 26) }),
+        skinSampler = ImageSampler('repeat', 'clamp', 'bilinear'),
+        lightSampler = ImageSampler('clamp', 'clamp', 'bilinear'),
         size = Vector.xy(0, 0),
         scale = 1,
         context = nil,
@@ -1069,6 +1444,19 @@ return function(context: Context): Layout<Game>
         seenBump = -1,
         nudgeDistance = 0,
         rings = Fog.newRings(),
+        moveTicks = 0,
+        lastHead = { x = sim.cur[1].x, y = sim.cur[1].y },
+        shadowLift = 0,
+
+        lights = Flicker.new(20240607),
+        holdF = false,
+        holdC = false,
+        sight = 0,
+        sightRoom = nil,
+        flash = 0,
+        sightIntensity = 1,
+        headLight = { 1, 1, 1 },
+        headLightSet = false,
 
         scene = nil,
         gpu = nil,
@@ -1078,6 +1466,8 @@ return function(context: Context): Layout<Game>
         gpuSampler = nil,
         mask = nil,
         maskDirty = true,
+        flickerCanvas = nil,
+        flickerDirty = true,
         imageSampler = ImageSampler('clamp', 'clamp', 'bilinear'),
         uniforms = buffer.create(UNIFORM_SIZE),
         gpuDirty = true,

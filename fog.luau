@@ -126,6 +126,19 @@ function Fog.inView(
     return true
 end
 
+-- The light the room you are in gives you: `sight` is how far you have taken
+-- it in (0-1) and `intensity` how bright its lights are. Same formula as the
+-- room light in vision.wgsl.
+function Fog.roomLight(sight: number, intensity: number): number
+    return Config.ROOM_SIGHT_GAIN * sight * (Config.ROOM_SIGHT_FLOOR + (1 - Config.ROOM_SIGHT_FLOOR) * intensity)
+end
+
+-- Whether a guest standing inside that room is in view. Only ever asked about
+-- the room the snake is in, so no other room is revealed.
+function Fog.roomSeen(sight: number, intensity: number): boolean
+    return Fog.roomLight(sight, intensity) > Config.VISIBLE_LIGHT
+end
+
 -- Beats per second: slow at full vision, fast at the floor.
 function Fog.beatRate(v: number): number
     local n = Fog.normalized(v)

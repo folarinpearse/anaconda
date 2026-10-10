@@ -5,6 +5,12 @@
 // cone shape for the CPU-side "can the player see this guest" test, so keep
 // the two in step.
 //
+// Two more things come from the lights. Every room's lights can dip or die
+// (flicker.luau): the scene is multiplied by what is left of its light at each
+// point, before any of the darkening below, so floor, walls and guests go dark
+// together. And the room the head is in is partly visible: lit rooms are seen
+// almost whole, dead ones only as moonlight.
+//
 // Positions are in tile units: cell (x, y) has its centre at (x + 0.5, y + 0.5).
 
 struct Uniforms {
@@ -26,12 +32,18 @@ struct Uniforms {
     gridSize: vec2<f32>,   // 80  level size, tiles (and wall mask size, px)
     _pad0: f32,            // 88
     _pad1: f32,            // 92
+    intensities0: vec4<f32>, //  96 light groups 1-4 (dj_room, lounge, bar, kitchen): 0 off, 1 on
+    intensities1: vec4<f32>, // 112 groups 5-8 (main_hall, games, bathroom, foyer)
+    intensities2: vec4<f32>, // 128 groups 9, 10 (red_room, corridors), 0, 0
+    roomRect: vec4<f32>,   // 144 the room the head is in: x0, y0, x1, y1 in tiles, 0.5 tile wider all round
+    roomSight: vec4<f32>,  // 160 sight 0-1, strike flash 0-1, that room's intensity, 0
 };
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var sceneTex: texture_2d<f32>;
 @group(0) @binding(2) var sceneSamp: sampler;
 @group(0) @binding(3) var maskTex: texture_2d<f32>; // one texel per tile, 1 = wall
+@group(0) @binding(4) var flickerTex: texture_2d<f32>; // flicker_mask.png: four 192 x 192 panels side by side
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -129,14 +141,64 @@ fn visibility(src: vec2<f32>, p: vec2<f32>) -> f32 {
     return 1.0 - smoothstep(WALL_DEPTH * 0.5, WALL_DEPTH * 1.5, inside);
 }
 
+// How much of the light at tile position p is left with the lights as they are.
+// Each channel of each panel is the share of the light there that one group
+// provides (0 unaffected, 1 all of it); panel p, channel c is group 3p + c + 1.
+// A group at intensity I takes share * (1 - I) of it away. lighting.luau's
+// flickerMult is the CPU twin, on a coarser copy of the same data.
+const MASK_PX: f32 = 192.0;
+
+fn flickerMult(p: vec2<f32>) -> f32 {
+    // Stay half a texel inside the panel so the filter never reaches the next one.
+    let inset = 0.5 / MASK_PX;
+    let uv = clamp(p / u.gridSize, vec2<f32>(inset), vec2<f32>(1.0 - inset));
+    let s0 = textureSampleLevel(flickerTex, sceneSamp, vec2<f32>((0.0 + uv.x) / 4.0, uv.y), 0.0).rgb;
+    let s1 = textureSampleLevel(flickerTex, sceneSamp, vec2<f32>((1.0 + uv.x) / 4.0, uv.y), 0.0).rgb;
+    let s2 = textureSampleLevel(flickerTex, sceneSamp, vec2<f32>((2.0 + uv.x) / 4.0, uv.y), 0.0).rgb;
+    let s3 = textureSampleLevel(flickerTex, sceneSamp, vec2<f32>((3.0 + uv.x) / 4.0, uv.y), 0.0).r; // panel 3: group 10 only
+    let i0 = u.intensities0;
+    let i1 = u.intensities1;
+    let i2 = u.intensities2;
+    var m = 1.0;
+    m = m * (1.0 - s0.r * (1.0 - i0.x)) * (1.0 - s0.g * (1.0 - i0.y)) * (1.0 - s0.b * (1.0 - i0.z));
+    m = m * (1.0 - s1.r * (1.0 - i0.w)) * (1.0 - s1.g * (1.0 - i1.x)) * (1.0 - s1.b * (1.0 - i1.y));
+    m = m * (1.0 - s2.r * (1.0 - i1.z)) * (1.0 - s2.g * (1.0 - i1.w)) * (1.0 - s2.b * (1.0 - i2.x));
+    m = m * (1.0 - s3 * (1.0 - i2.y));
+    return m;
+}
+
+// ROOM_SIGHT_GAIN, ROOM_SIGHT_FLOOR and ROOM_FLASH_GAIN in config.luau.
+const ROOM_SIGHT_GAIN: f32 = 0.8;
+const ROOM_SIGHT_FLOOR: f32 = 0.25;
+const ROOM_FLASH_GAIN: f32 = 0.3;
+const ROOM_EDGE: f32 = 0.25; // tiles of soft edge on the room's box
+
+// 1 inside the room the head is in, falling off over ROOM_EDGE tiles at its sides.
+fn inRoom(p: vec2<f32>) -> f32 {
+    let lo = u.roomRect.xy;
+    let hi = u.roomRect.zw;
+    let x = smoothstep(lo.x, lo.x + ROOM_EDGE, p.x) * (1.0 - smoothstep(hi.x - ROOM_EDGE, hi.x, p.x));
+    let y = smoothstep(lo.y, lo.y + ROOM_EDGE, p.y) * (1.0 - smoothstep(hi.y - ROOM_EDGE, hi.y, p.y));
+    return x * y;
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let scene = textureSample(sceneTex, sceneSamp, in.uv);
-    var col = scene.rgb;
 
     let px = in.uv * u.resolution;
     let t = (px - u.mapOrigin) / u.pxPerTile;
     let time = u.time;
+
+    // Whatever the lights are doing, to everything the scene shows.
+    var col = scene.rgb * flickerMult(t);
+
+    // The room the head is in: a lit room is seen almost whole, a dead one is
+    // moonlight. The strike flash lifts the room as its lights come back.
+    let sight = u.roomSight.x;
+    let flash = u.roomSight.y;
+    let inside = inRoom(t);
+    col = col * (1.0 + ROOM_FLASH_GAIN * flash * inside);
     let starve = 1.0 - u.vision; // 0 at full vision, 0.85 at the floor
     let hurt = 1.0 - u.health;
 
@@ -170,6 +232,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // Eating: the darkness lifts across the whole map and falls back.
     light = max(light, smoothstep(0.0, 1.0, u.reveal) * 0.9);
+
+    // Only the room the head is in, and only while it has taken it in.
+    light = max(light, ROOM_SIGHT_GAIN * sight * (ROOM_SIGHT_FLOOR + (1.0 - ROOM_SIGHT_FLOOR) * u.roomSight.z) * inside);
 
     // Wall impact: a soft glow at the struck tile that fades over one second,
     // lighting the walls around it.

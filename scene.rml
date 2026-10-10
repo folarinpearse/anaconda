@@ -345,11 +345,18 @@
     <FontAsset file="Inter.ttf" assetId="4228759" name="Inter" id="0:90"/>
     <ImageAsset file="floor_base.png" height="960" width="960" assetId="7007413" name="floor_base" id="0:910"/>
     <ImageAsset file="walls_overlay.png" height="960" width="960" assetId="7007416" name="walls_overlay" id="0:911"/>
-    <ScriptAsset file="main.luau" dependencyIds="0:83-0:84-0:81-0:85" compilationOrder="6" serializedImplementedMethods="70409" scriptProtocolValue="2" name="main" id="0:80"/>
+    <ImageAsset file="snake_skin.png" height="272" width="1280" name="snake_skin" id="0:912"/>
+    <ImageAsset file="snake_light.png" height="192" width="192" name="snake_light" id="0:913"/>
+    <ImageAsset file="flicker_mask.png" height="192" width="768" name="flicker_mask" id="0:914"/>
+    <ScriptAsset file="main.luau" dependencyIds="0:83-0:84-0:81-0:85-0:88-0:89" compilationOrder="8" serializedImplementedMethods="70409" scriptProtocolValue="2" name="main" id="0:80"/>
     <ScriptAsset file="sim.luau" isModule="true" dependencyIds="0:84" compilationOrder="4" name="sim" id="0:81"/>
     <ScriptAsset file="level.luau" isModule="true" name="level" id="0:83"/>
     <ScriptAsset file="config.luau" isModule="true" compilationOrder="2" name="config" id="0:84"/>
     <ScriptAsset file="fog.luau" isModule="true" dependencyIds="0:84" compilationOrder="5" name="fog" id="0:85"/>
+    <ScriptAsset file="lightmap.luau" isModule="true" name="lightmap" id="0:86"/>
+    <ScriptAsset file="flicker_mask.luau" isModule="true" name="flicker_mask" id="0:87"/>
+    <ScriptAsset file="lighting.luau" isModule="true" dependencyIds="0:86-0:87" compilationOrder="7" name="lighting" id="0:88"/>
+    <ScriptAsset file="flicker.luau" isModule="true" dependencyIds="0:84-0:85" compilationOrder="6" name="flicker" id="0:89"/>
     <ViewModel defaultInstanceId="0:106" name="Game" id="0:100">
         <ViewModelPropertyNumber name="score" id="0:101"/>
         <ViewModelPropertyNumber name="length" id="0:102"/>
