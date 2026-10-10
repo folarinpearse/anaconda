@@ -1,95 +1,115 @@
 <Rive version="1" kind="fragment">
-    <!-- SnakeHead: a 48x48 placeholder head that faces RIGHT (+x). The rig is
-         anchored at the neck joint (12,24), so the game script positions the
-         neck on the snake's head point and rotates the artboard around it.
-         Its state machine plays one visibly different animation per value of
-         the `state` enum on its own view model (idle, lunge, eat, hit); the
-         `hunger` number (0-1, 1 = vision at the floor) widens the pupils and
-         lights the eyes red. Node names are the contract with main.luau and
-         the Rive Editor art pass: keep them when redrawing. -->
-    <Artboard x="1200" y="0" defaultStateMachineId="0:1011" viewModelId="0:1029" viewModelInstanceId="0:1032"
-              width="48" height="48" styleId="0:1001" name="SnakeHead" id="0:1000">
+    <Artboard defaultStateMachineId="0:1011" viewModelId="0:1029" viewModelInstanceId="0:1032" width="48" height="48" styleId="0:1001" x="1200" name="SnakeHead" id="0:1000">
         <LayoutComponentStyle name="SnakeHead Style" id="0:1001"/>
-
         <Node x="12" y="24" name="Rig" id="0:1002">
-            <!-- first sibling draws on top: hit flash, eyes, mouth, head highlight, head, tongue -->
-            <Shape x="8" y="0" opacity="0" name="Hit Flash" id="0:1003">
-            <Ellipse width="32" height="30" name="Hit Flash Path" id="0:1052"></Ellipse>
-            <Fill name="Fill" id="0:1050"><SolidColor colorValue="FFFFEBE6" name="Color" id="0:1051"/></Fill>
-        </Shape>
+            <Shape x="8" opacity="0" name="Hit Flash" id="0:1003">
+                <Ellipse width="32" height="30" name="Hit Flash Path" id="0:1052"/>
+                <Fill name="Fill" id="0:1050">
+                    <SolidColor colorValue="FFFFEBE6" name="Color" id="0:1051"/>
+                </Fill>
+            </Shape>
             <Node name="Eyes" id="0:1004">
                 <Node x="12" y="-9.5" name="Eye Left" id="0:1005">
-            <Shape x="0" y="0"  name="Pupil Left" id="0:1036">
-            <Ellipse width="2.4" height="6" name="Pupil Left Path" id="0:1056"/>
-            <Fill name="Fill" id="0:1053"><SolidColor colorValue="FF0E0E0A" name="Color" id="0:1054"/></Fill>
-            <DataBindContext sourcePathIds="0:1029-0:1031" propertyKey="16" converterId="0:1033" id="0:1055"/>
-        </Shape>
-            <Shape x="0" y="0"  name="Eye Ball Left" id="0:1061">
-            <Ellipse width="8" height="7" name="Eye Ball Left Path" id="0:1062"></Ellipse>
-            <Fill name="Fill" id="0:1057"><SolidColor colorValue="FFF2D544" name="Color" id="0:1058"/></Fill>
-            <Stroke thickness="1" cap="round" join="round" name="Eye Rim" id="0:1059"><SolidColor colorValue="FF262E16" name="Color" id="0:1060"/></Stroke>
-        </Shape>
-            <Shape x="0" y="0" opacity="0" name="Eye Glow Left" id="0:1034">
-            <Ellipse width="12" height="11" name="Eye Glow Left Path" id="0:1066"/>
-            <Fill name="Fill" id="0:1063"><SolidColor colorValue="FFFF3B2A" name="Color" id="0:1064"/></Fill>
-            <DataBindContext sourcePathIds="0:1029-0:1031" propertyKey="18" id="0:1065"/>
-        </Shape>
-        </Node>
+                    <Shape name="Pupil Left" id="0:1036">
+                        <Ellipse width="2.4000001" height="6" name="Pupil Left Path" id="0:1056"/>
+                        <Fill name="Fill" id="0:1053">
+                            <SolidColor colorValue="FF0E0E0A" name="Color" id="0:1054"/>
+                        </Fill>
+                        <DataBindContext sourcePathIds="0:1029-0:1031" propertyKey="16" converterId="0:1033" id="0:1055"/>
+                    </Shape>
+                    <Shape name="Eye Ball Left" id="0:1061">
+                        <Ellipse width="8" height="7" name="Eye Ball Left Path" id="0:1062"/>
+                        <Fill name="Fill" id="0:1057">
+                            <SolidColor colorValue="FFF2D544" name="Color" id="0:1058"/>
+                        </Fill>
+                        <Stroke cap="1" join="1" name="Eye Rim" id="0:1059">
+                            <SolidColor colorValue="FF262E16" name="Color" id="0:1060"/>
+                        </Stroke>
+                    </Shape>
+                    <Shape opacity="0" name="Eye Glow Left" id="0:1034">
+                        <Ellipse width="12" height="11" name="Eye Glow Left Path" id="0:1066"/>
+                        <Fill name="Fill" id="0:1063">
+                            <SolidColor colorValue="FFFF3B2A" name="Color" id="0:1064"/>
+                        </Fill>
+                        <DataBindContext sourcePathIds="0:1029-0:1031" propertyKey="18" id="0:1065"/>
+                    </Shape>
+                </Node>
                 <Node x="12" y="9.5" name="Eye Right" id="0:1006">
-            <Shape x="0" y="0"  name="Pupil Right" id="0:1037">
-            <Ellipse width="2.4" height="6" name="Pupil Right Path" id="0:1070"/>
-            <Fill name="Fill" id="0:1067"><SolidColor colorValue="FF0E0E0A" name="Color" id="0:1068"/></Fill>
-            <DataBindContext sourcePathIds="0:1029-0:1031" propertyKey="16" converterId="0:1033" id="0:1069"/>
-        </Shape>
-            <Shape x="0" y="0"  name="Eye Ball Right" id="0:1075">
-            <Ellipse width="8" height="7" name="Eye Ball Right Path" id="0:1076"></Ellipse>
-            <Fill name="Fill" id="0:1071"><SolidColor colorValue="FFF2D544" name="Color" id="0:1072"/></Fill>
-            <Stroke thickness="1" cap="round" join="round" name="Eye Rim" id="0:1073"><SolidColor colorValue="FF262E16" name="Color" id="0:1074"/></Stroke>
-        </Shape>
-            <Shape x="0" y="0" opacity="0" name="Eye Glow Right" id="0:1035">
-            <Ellipse width="12" height="11" name="Eye Glow Right Path" id="0:1080"/>
-            <Fill name="Fill" id="0:1077"><SolidColor colorValue="FFFF3B2A" name="Color" id="0:1078"/></Fill>
-            <DataBindContext sourcePathIds="0:1029-0:1031" propertyKey="18" id="0:1079"/>
-        </Shape>
-        </Node>
+                    <Shape name="Pupil Right" id="0:1037">
+                        <Ellipse width="2.4000001" height="6" name="Pupil Right Path" id="0:1070"/>
+                        <Fill name="Fill" id="0:1067">
+                            <SolidColor colorValue="FF0E0E0A" name="Color" id="0:1068"/>
+                        </Fill>
+                        <DataBindContext sourcePathIds="0:1029-0:1031" propertyKey="16" converterId="0:1033" id="0:1069"/>
+                    </Shape>
+                    <Shape name="Eye Ball Right" id="0:1075">
+                        <Ellipse width="8" height="7" name="Eye Ball Right Path" id="0:1076"/>
+                        <Fill name="Fill" id="0:1071">
+                            <SolidColor colorValue="FFF2D544" name="Color" id="0:1072"/>
+                        </Fill>
+                        <Stroke cap="1" join="1" name="Eye Rim" id="0:1073">
+                            <SolidColor colorValue="FF262E16" name="Color" id="0:1074"/>
+                        </Stroke>
+                    </Shape>
+                    <Shape opacity="0" name="Eye Glow Right" id="0:1035">
+                        <Ellipse width="12" height="11" name="Eye Glow Right Path" id="0:1080"/>
+                        <Fill name="Fill" id="0:1077">
+                            <SolidColor colorValue="FFFF3B2A" name="Color" id="0:1078"/>
+                        </Fill>
+                        <DataBindContext sourcePathIds="0:1029-0:1031" propertyKey="18" id="0:1079"/>
+                    </Shape>
+                </Node>
             </Node>
-            <Shape x="17" y="0" scaleX="0" scaleY="0" name="Mouth" id="0:1007">
-            <Ellipse width="14" height="12" name="Mouth Path" id="0:1083"></Ellipse>
-            <Fill name="Fill" id="0:1081"><SolidColor colorValue="FF4A1010" name="Color" id="0:1082"/></Fill>
-        </Shape>
-            <Shape x="6" y="0"  name="Head Highlight" id="0:1008">
-            <Ellipse width="22" height="12" name="Head Highlight Path" id="0:1086"></Ellipse>
-            <Fill name="Fill" id="0:1084"><SolidColor colorValue="55C8E08A" name="Color" id="0:1085"/></Fill>
-        </Shape>
-            <Shape x="8" y="0"  name="Head" id="0:1009">
-            <Ellipse width="32" height="30" name="Head Path" id="0:1091"></Ellipse>
-            <Fill name="Fill" id="0:1087"><SolidColor colorValue="FF6E863C" name="Color" id="0:1088"/></Fill>
-            <Stroke thickness="2" cap="round" join="round" name="Outline" id="0:1089"><SolidColor colorValue="FF262E16" name="Color" id="0:1090"/></Stroke>
-        </Shape>
-            <Node x="20" y="0" scaleX="0" name="Tongue" id="0:1010">
-            <Shape x="9" y="0" rotation="-0.5" name="Tongue Fork Upper" id="0:1038">
-            <Rectangle width="5" height="1.8" originX="0" originY="0.5" cornerRadiusTL="0.9" cornerRadiusTR="0.9" cornerRadiusBL="0.9" cornerRadiusBR="0.9" name="Tongue Fork Upper Path" id="0:1039"/>
-            <Fill name="Fill" id="0:1040"><SolidColor colorValue="FFE53935" name="Color" id="0:1041"/></Fill>
-        </Shape>
-            <Shape x="9" y="0" rotation="0.5" name="Tongue Fork Lower" id="0:1042">
-            <Rectangle width="5" height="1.8" originX="0" originY="0.5" cornerRadiusTL="0.9" cornerRadiusTR="0.9" cornerRadiusBL="0.9" cornerRadiusBR="0.9" name="Tongue Fork Lower Path" id="0:1043"/>
-            <Fill name="Fill" id="0:1044"><SolidColor colorValue="FFE53935" name="Color" id="0:1045"/></Fill>
-        </Shape>
-            <Shape x="0" y="0" rotation="0" name="Tongue Stem" id="0:1046">
-            <Rectangle width="10" height="2.2" originX="0" originY="0.5" cornerRadiusTL="0.9" cornerRadiusTR="0.9" cornerRadiusBL="0.9" cornerRadiusBR="0.9" name="Tongue Stem Path" id="0:1047"/>
-            <Fill name="Fill" id="0:1048"><SolidColor colorValue="FFE53935" name="Color" id="0:1049"/></Fill>
-        </Shape>
+            <Shape x="17" scaleX="0" scaleY="0" name="Mouth" id="0:1007">
+                <Ellipse width="14" height="12" name="Mouth Path" id="0:1083"/>
+                <Fill name="Fill" id="0:1081">
+                    <SolidColor colorValue="FF4A1010" name="Color" id="0:1082"/>
+                </Fill>
+            </Shape>
+            <Shape x="6" name="Head Highlight" id="0:1008">
+                <Ellipse width="22" height="12" name="Head Highlight Path" id="0:1086"/>
+                <Fill name="Fill" id="0:1084">
+                    <SolidColor colorValue="55C8E08A" name="Color" id="0:1085"/>
+                </Fill>
+            </Shape>
+            <Shape x="8" name="Head" id="0:1009">
+                <Ellipse width="32" height="30" name="Head Path" id="0:1091"/>
+                <Fill name="Fill" id="0:1087">
+                    <SolidColor colorValue="FF6E863C" name="Color" id="0:1088"/>
+                </Fill>
+                <Stroke thickness="2" cap="1" join="1" name="Outline" id="0:1089">
+                    <SolidColor colorValue="FF262E16" name="Color" id="0:1090"/>
+                </Stroke>
+            </Shape>
+            <Node x="20" scaleX="0" name="Tongue" id="0:1010">
+                <Shape x="9" rotation="-0.5" name="Tongue Fork Upper" id="0:1038">
+                    <Rectangle cornerRadiusTL="0.89999998" cornerRadiusTR="0.89999998" cornerRadiusBL="0.89999998" cornerRadiusBR="0.89999998" width="5" height="1.8" originX="0" name="Tongue Fork Upper Path" id="0:1039"/>
+                    <Fill name="Fill" id="0:1040">
+                        <SolidColor colorValue="FFE53935" name="Color" id="0:1041"/>
+                    </Fill>
+                </Shape>
+                <Shape x="9" rotation="0.5" name="Tongue Fork Lower" id="0:1042">
+                    <Rectangle cornerRadiusTL="0.89999998" cornerRadiusTR="0.89999998" cornerRadiusBL="0.89999998" cornerRadiusBR="0.89999998" width="5" height="1.8" originX="0" name="Tongue Fork Lower Path" id="0:1043"/>
+                    <Fill name="Fill" id="0:1044">
+                        <SolidColor colorValue="FFE53935" name="Color" id="0:1045"/>
+                    </Fill>
+                </Shape>
+                <Shape name="Tongue Stem" id="0:1046">
+                    <Rectangle cornerRadiusTL="0.89999998" cornerRadiusTR="0.89999998" cornerRadiusBL="0.89999998" cornerRadiusBR="0.89999998" width="10" height="2.2" originX="0" name="Tongue Stem Path" id="0:1047"/>
+                    <Fill name="Fill" id="0:1048">
+                        <SolidColor colorValue="FFE53935" name="Color" id="0:1049"/>
+                    </Fill>
+                </Shape>
+            </Node>
         </Node>
-        </Node>
-
         <StateMachine name="Head State Machine" id="0:1011">
             <StateMachineLayer name="Head Layer" id="0:1012">
-                <AnyState x="0" y="-160" id="0:1013"/>
-                <ExitState x="0" y="-80" id="0:1014"/>
-                <EntryState x="0" y="0" id="0:1015">
+                <AnyState y="-160" id="0:1013"/>
+                <ExitState y="-80" id="0:1014"/>
+                <EntryState id="0:1015">
                     <StateTransition stateToId="0:1016" id="0:1310"/>
                 </EntryState>
-                <AnimationState x="220" y="0" animationId="0:1020" reset="true" id="0:1016">
+                <AnimationState animationId="0:1020" x="207" y="1" reset="true" id="0:1016">
                     <StateTransition stateToId="0:1017" duration="60" id="0:1238">
                         <TransitionViewModelCondition id="0:1239">
                             <TransitionPropertyViewModelComparator id="0:1240">
@@ -110,7 +130,7 @@
                             <TransitionValueEnumComparator value="0:1027" id="0:1249"/>
                         </TransitionViewModelCondition>
                     </StateTransition>
-                    <StateTransition stateToId="0:1019" duration="0" id="0:1250">
+                    <StateTransition stateToId="0:1019" id="0:1250">
                         <TransitionViewModelCondition id="0:1251">
                             <TransitionPropertyViewModelComparator id="0:1252">
                                 <BindablePropertyEnum id="0:1253">
@@ -121,7 +141,7 @@
                         </TransitionViewModelCondition>
                     </StateTransition>
                 </AnimationState>
-                <AnimationState x="440" y="-100" animationId="0:1021" reset="true" id="0:1017">
+                <AnimationState animationId="0:1021" x="440" y="-100" reset="true" id="0:1017">
                     <StateTransition stateToId="0:1016" duration="60" id="0:1256">
                         <TransitionViewModelCondition id="0:1257">
                             <TransitionPropertyViewModelComparator id="0:1258">
@@ -142,7 +162,7 @@
                             <TransitionValueEnumComparator value="0:1027" id="0:1267"/>
                         </TransitionViewModelCondition>
                     </StateTransition>
-                    <StateTransition stateToId="0:1019" duration="0" id="0:1268">
+                    <StateTransition stateToId="0:1019" id="0:1268">
                         <TransitionViewModelCondition id="0:1269">
                             <TransitionPropertyViewModelComparator id="0:1270">
                                 <BindablePropertyEnum id="0:1271">
@@ -153,7 +173,7 @@
                         </TransitionViewModelCondition>
                     </StateTransition>
                 </AnimationState>
-                <AnimationState x="660" y="0" animationId="0:1022" reset="true" id="0:1018">
+                <AnimationState animationId="0:1022" x="660" reset="true" id="0:1018">
                     <StateTransition stateToId="0:1016" duration="60" id="0:1274">
                         <TransitionViewModelCondition id="0:1275">
                             <TransitionPropertyViewModelComparator id="0:1276">
@@ -174,7 +194,7 @@
                             <TransitionValueEnumComparator value="0:1026" id="0:1285"/>
                         </TransitionViewModelCondition>
                     </StateTransition>
-                    <StateTransition stateToId="0:1019" duration="0" id="0:1286">
+                    <StateTransition stateToId="0:1019" id="0:1286">
                         <TransitionViewModelCondition id="0:1287">
                             <TransitionPropertyViewModelComparator id="0:1288">
                                 <BindablePropertyEnum id="0:1289">
@@ -185,7 +205,7 @@
                         </TransitionViewModelCondition>
                     </StateTransition>
                 </AnimationState>
-                <AnimationState x="440" y="100" animationId="0:1023" reset="true" id="0:1019">
+                <AnimationState animationId="0:1023" x="440" y="100" reset="true" id="0:1019">
                     <StateTransition stateToId="0:1016" duration="60" id="0:1292">
                         <TransitionViewModelCondition id="0:1293">
                             <TransitionPropertyViewModelComparator id="0:1294">
@@ -219,240 +239,234 @@
                 </AnimationState>
             </StateMachineLayer>
         </StateMachine>
-
-        <LinearAnimation duration="120" loopValue="loop" name="Idle sway + flick" id="0:1020">
+        <LinearAnimation duration="120" loopValue="1" name="Idle sway + flick" id="0:1020">
             <KeyedObject objectId="0:1002" id="0:1104">
                 <KeyedProperty propertyKey="13" id="0:1093">
-                    <KeyFrameDouble value="12" interpolationType="linear" id="0:1092"/>
+                    <KeyFrameDouble value="12" interpolationType="1" id="0:1092"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="14" id="0:1095">
-                    <KeyFrameDouble value="24" interpolationType="linear" id="0:1094"/>
+                    <KeyFrameDouble value="24" interpolationType="1" id="0:1094"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="15" id="0:1099">
-                    <KeyFrameDouble value="-0.03" interpolationType="linear" id="0:1096"/>
-                    <KeyFrameDouble value="0.03" frame="60" interpolationType="linear" id="0:1097"/>
-                    <KeyFrameDouble value="-0.03" frame="120" interpolationType="linear" id="0:1098"/>
+                    <KeyFrameDouble value="-0.029999999" interpolationType="1" id="0:1096"/>
+                    <KeyFrameDouble value="0.029999999" interpolationType="1" frame="60" id="0:1097"/>
+                    <KeyFrameDouble value="-0.029999999" interpolationType="1" frame="120" id="0:1098"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="16" id="0:1101">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:1100"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:1100"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:1103">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:1102"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:1102"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1010" id="0:1116">
                 <KeyedProperty propertyKey="16" id="0:1115">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:1105"/>
-                    <KeyFrameDouble value="0" frame="18" interpolationType="linear" id="0:1106"/>
-                    <KeyFrameDouble value="1" frame="26" interpolationType="linear" id="0:1107"/>
-                    <KeyFrameDouble value="1" frame="32" interpolationType="linear" id="0:1108"/>
-                    <KeyFrameDouble value="0" frame="40" interpolationType="linear" id="0:1109"/>
-                    <KeyFrameDouble value="0" frame="52" interpolationType="linear" id="0:1110"/>
-                    <KeyFrameDouble value="1" frame="57" interpolationType="linear" id="0:1111"/>
-                    <KeyFrameDouble value="1" frame="61" interpolationType="linear" id="0:1112"/>
-                    <KeyFrameDouble value="0" frame="66" interpolationType="linear" id="0:1113"/>
-                    <KeyFrameDouble value="0" frame="120" interpolationType="linear" id="0:1114"/>
+                    <KeyFrameDouble interpolationType="1" id="0:1105"/>
+                    <KeyFrameDouble interpolationType="1" frame="18" id="0:1106"/>
+                    <KeyFrameDouble value="1" interpolationType="1" frame="26" id="0:1107"/>
+                    <KeyFrameDouble value="1" interpolationType="1" frame="32" id="0:1108"/>
+                    <KeyFrameDouble interpolationType="1" frame="40" id="0:1109"/>
+                    <KeyFrameDouble interpolationType="1" frame="52" id="0:1110"/>
+                    <KeyFrameDouble value="1" interpolationType="1" frame="57" id="0:1111"/>
+                    <KeyFrameDouble value="1" interpolationType="1" frame="61" id="0:1112"/>
+                    <KeyFrameDouble interpolationType="1" frame="66" id="0:1113"/>
+                    <KeyFrameDouble interpolationType="1" frame="120" id="0:1114"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1007" id="0:1121">
                 <KeyedProperty propertyKey="16" id="0:1118">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:1117"/>
+                    <KeyFrameDouble interpolationType="1" id="0:1117"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:1120">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:1119"/>
+                    <KeyFrameDouble interpolationType="1" id="0:1119"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1003" id="0:1124">
                 <KeyedProperty propertyKey="18" id="0:1123">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:1122"/>
+                    <KeyFrameDouble interpolationType="1" id="0:1122"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1004" id="0:1131">
                 <KeyedProperty propertyKey="17" id="0:1130">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:1125"/>
-                    <KeyFrameDouble value="1" frame="96" interpolationType="linear" id="0:1126"/>
-                    <KeyFrameDouble value="0.1" frame="100" interpolationType="linear" id="0:1127"/>
-                    <KeyFrameDouble value="1" frame="105" interpolationType="linear" id="0:1128"/>
-                    <KeyFrameDouble value="1" frame="120" interpolationType="linear" id="0:1129"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:1125"/>
+                    <KeyFrameDouble value="1" interpolationType="1" frame="96" id="0:1126"/>
+                    <KeyFrameDouble value="0.1" interpolationType="1" frame="100" id="0:1127"/>
+                    <KeyFrameDouble value="1" interpolationType="1" frame="105" id="0:1128"/>
+                    <KeyFrameDouble value="1" interpolationType="1" frame="120" id="0:1129"/>
                 </KeyedProperty>
             </KeyedObject>
         </LinearAnimation>
-        <LinearAnimation duration="8" loopValue="loop" name="Lunge strike" id="0:1021">
+        <LinearAnimation duration="8" loopValue="1" name="Lunge strike" id="0:1021">
             <KeyedObject objectId="0:1002" id="0:1144">
                 <KeyedProperty propertyKey="13" id="0:1135">
-                    <KeyFrameDouble value="12" interpolationType="linear" id="0:1132"/>
-                    <KeyFrameDouble value="10.5" frame="4" interpolationType="linear" id="0:1133"/>
-                    <KeyFrameDouble value="12" frame="8" interpolationType="linear" id="0:1134"/>
+                    <KeyFrameDouble value="12" interpolationType="1" id="0:1132"/>
+                    <KeyFrameDouble value="10.5" interpolationType="1" frame="4" id="0:1133"/>
+                    <KeyFrameDouble value="12" interpolationType="1" frame="8" id="0:1134"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="14" id="0:1137">
-                    <KeyFrameDouble value="24" interpolationType="linear" id="0:1136"/>
+                    <KeyFrameDouble value="24" interpolationType="1" id="0:1136"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="15" id="0:1139">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:1138"/>
+                    <KeyFrameDouble interpolationType="1" id="0:1138"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="16" id="0:1141">
-                    <KeyFrameDouble value="1.2" interpolationType="linear" id="0:1140"/>
+                    <KeyFrameDouble value="1.2" interpolationType="1" id="0:1140"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:1143">
-                    <KeyFrameDouble value="0.86" interpolationType="linear" id="0:1142"/>
+                    <KeyFrameDouble value="0.86000001" interpolationType="1" id="0:1142"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1010" id="0:1147">
                 <KeyedProperty propertyKey="16" id="0:1146">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:1145"/>
+                    <KeyFrameDouble interpolationType="1" id="0:1145"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1007" id="0:1152">
                 <KeyedProperty propertyKey="16" id="0:1149">
-                    <KeyFrameDouble value="0.8" interpolationType="linear" id="0:1148"/>
+                    <KeyFrameDouble value="0.80000001" interpolationType="1" id="0:1148"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:1151">
-                    <KeyFrameDouble value="0.7" interpolationType="linear" id="0:1150"/>
+                    <KeyFrameDouble value="0.69999999" interpolationType="1" id="0:1150"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1003" id="0:1155">
                 <KeyedProperty propertyKey="18" id="0:1154">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:1153"/>
+                    <KeyFrameDouble interpolationType="1" id="0:1153"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1004" id="0:1158">
                 <KeyedProperty propertyKey="17" id="0:1157">
-                    <KeyFrameDouble value="0.45" interpolationType="linear" id="0:1156"/>
+                    <KeyFrameDouble value="0.44999999" interpolationType="1" id="0:1156"/>
                 </KeyedProperty>
             </KeyedObject>
         </LinearAnimation>
-        <LinearAnimation duration="15" loopValue="oneShot" name="Eat chomp" id="0:1022">
+        <LinearAnimation duration="15" name="Eat chomp" id="0:1022">
             <KeyedObject objectId="0:1002" id="0:1175">
                 <KeyedProperty propertyKey="13" id="0:1160">
-                    <KeyFrameDouble value="12" interpolationType="linear" id="0:1159"/>
+                    <KeyFrameDouble value="12" interpolationType="1" id="0:1159"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="14" id="0:1162">
-                    <KeyFrameDouble value="24" interpolationType="linear" id="0:1161"/>
+                    <KeyFrameDouble value="24" interpolationType="1" id="0:1161"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="15" id="0:1164">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:1163"/>
+                    <KeyFrameDouble interpolationType="1" id="0:1163"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="16" id="0:1169">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:1165"/>
-                    <KeyFrameDouble value="1.22" frame="5" interpolationType="linear" id="0:1166"/>
-                    <KeyFrameDouble value="0.95" frame="10" interpolationType="linear" id="0:1167"/>
-                    <KeyFrameDouble value="1" frame="15" interpolationType="linear" id="0:1168"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:1165"/>
+                    <KeyFrameDouble value="1.22" interpolationType="1" frame="5" id="0:1166"/>
+                    <KeyFrameDouble value="0.94999999" interpolationType="1" frame="10" id="0:1167"/>
+                    <KeyFrameDouble value="1" interpolationType="1" frame="15" id="0:1168"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:1174">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:1170"/>
-                    <KeyFrameDouble value="1.22" frame="5" interpolationType="linear" id="0:1171"/>
-                    <KeyFrameDouble value="0.95" frame="10" interpolationType="linear" id="0:1172"/>
-                    <KeyFrameDouble value="1" frame="15" interpolationType="linear" id="0:1173"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:1170"/>
+                    <KeyFrameDouble value="1.22" interpolationType="1" frame="5" id="0:1171"/>
+                    <KeyFrameDouble value="0.94999999" interpolationType="1" frame="10" id="0:1172"/>
+                    <KeyFrameDouble value="1" interpolationType="1" frame="15" id="0:1173"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1010" id="0:1178">
                 <KeyedProperty propertyKey="16" id="0:1177">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:1176"/>
+                    <KeyFrameDouble interpolationType="1" id="0:1176"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1007" id="0:1191">
                 <KeyedProperty propertyKey="16" id="0:1184">
-                    <KeyFrameDouble value="0.2" interpolationType="linear" id="0:1179"/>
-                    <KeyFrameDouble value="1.3" frame="5" interpolationType="linear" id="0:1180"/>
-                    <KeyFrameDouble value="1.3" frame="9" interpolationType="linear" id="0:1181"/>
-                    <KeyFrameDouble value="0.3" frame="12" interpolationType="linear" id="0:1182"/>
-                    <KeyFrameDouble value="0" frame="15" interpolationType="linear" id="0:1183"/>
+                    <KeyFrameDouble value="0.2" interpolationType="1" id="0:1179"/>
+                    <KeyFrameDouble value="1.3" interpolationType="1" frame="5" id="0:1180"/>
+                    <KeyFrameDouble value="1.3" interpolationType="1" frame="9" id="0:1181"/>
+                    <KeyFrameDouble value="0.30000001" interpolationType="1" frame="12" id="0:1182"/>
+                    <KeyFrameDouble interpolationType="1" frame="15" id="0:1183"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:1190">
-                    <KeyFrameDouble value="0.2" interpolationType="linear" id="0:1185"/>
-                    <KeyFrameDouble value="1.3" frame="5" interpolationType="linear" id="0:1186"/>
-                    <KeyFrameDouble value="1.3" frame="9" interpolationType="linear" id="0:1187"/>
-                    <KeyFrameDouble value="0.3" frame="12" interpolationType="linear" id="0:1188"/>
-                    <KeyFrameDouble value="0" frame="15" interpolationType="linear" id="0:1189"/>
+                    <KeyFrameDouble value="0.2" interpolationType="1" id="0:1185"/>
+                    <KeyFrameDouble value="1.3" interpolationType="1" frame="5" id="0:1186"/>
+                    <KeyFrameDouble value="1.3" interpolationType="1" frame="9" id="0:1187"/>
+                    <KeyFrameDouble value="0.30000001" interpolationType="1" frame="12" id="0:1188"/>
+                    <KeyFrameDouble interpolationType="1" frame="15" id="0:1189"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1003" id="0:1194">
                 <KeyedProperty propertyKey="18" id="0:1193">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:1192"/>
+                    <KeyFrameDouble interpolationType="1" id="0:1192"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1004" id="0:1200">
                 <KeyedProperty propertyKey="17" id="0:1199">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:1195"/>
-                    <KeyFrameDouble value="0.55" frame="6" interpolationType="linear" id="0:1196"/>
-                    <KeyFrameDouble value="0.55" frame="12" interpolationType="linear" id="0:1197"/>
-                    <KeyFrameDouble value="1" frame="15" interpolationType="linear" id="0:1198"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:1195"/>
+                    <KeyFrameDouble value="0.55000001" interpolationType="1" frame="6" id="0:1196"/>
+                    <KeyFrameDouble value="0.55000001" interpolationType="1" frame="12" id="0:1197"/>
+                    <KeyFrameDouble value="1" interpolationType="1" frame="15" id="0:1198"/>
                 </KeyedProperty>
             </KeyedObject>
         </LinearAnimation>
-        <LinearAnimation duration="18" loopValue="oneShot" name="Hit blink" id="0:1023">
+        <LinearAnimation duration="18" name="Hit blink" id="0:1023">
             <KeyedObject objectId="0:1002" id="0:1215">
                 <KeyedProperty propertyKey="13" id="0:1202">
-                    <KeyFrameDouble value="12" interpolationType="linear" id="0:1201"/>
+                    <KeyFrameDouble value="12" interpolationType="1" id="0:1201"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="14" id="0:1204">
-                    <KeyFrameDouble value="24" interpolationType="linear" id="0:1203"/>
+                    <KeyFrameDouble value="24" interpolationType="1" id="0:1203"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="15" id="0:1210">
-                    <KeyFrameDouble value="0.32" interpolationType="linear" id="0:1205"/>
-                    <KeyFrameDouble value="-0.26" frame="4" interpolationType="linear" id="0:1206"/>
-                    <KeyFrameDouble value="0.2" frame="8" interpolationType="linear" id="0:1207"/>
-                    <KeyFrameDouble value="-0.1" frame="12" interpolationType="linear" id="0:1208"/>
-                    <KeyFrameDouble value="0" frame="18" interpolationType="linear" id="0:1209"/>
+                    <KeyFrameDouble value="0.31999999" interpolationType="1" id="0:1205"/>
+                    <KeyFrameDouble value="-0.25999999" interpolationType="1" frame="4" id="0:1206"/>
+                    <KeyFrameDouble value="0.2" interpolationType="1" frame="8" id="0:1207"/>
+                    <KeyFrameDouble value="-0.1" interpolationType="1" frame="12" id="0:1208"/>
+                    <KeyFrameDouble interpolationType="1" frame="18" id="0:1209"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="16" id="0:1212">
-                    <KeyFrameDouble value="0.92" interpolationType="linear" id="0:1211"/>
+                    <KeyFrameDouble value="0.92000002" interpolationType="1" id="0:1211"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:1214">
-                    <KeyFrameDouble value="1.08" interpolationType="linear" id="0:1213"/>
+                    <KeyFrameDouble value="1.08" interpolationType="1" id="0:1213"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1010" id="0:1218">
                 <KeyedProperty propertyKey="16" id="0:1217">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:1216"/>
+                    <KeyFrameDouble interpolationType="1" id="0:1216"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1007" id="0:1223">
                 <KeyedProperty propertyKey="16" id="0:1220">
-                    <KeyFrameDouble value="0.6" interpolationType="linear" id="0:1219"/>
+                    <KeyFrameDouble value="0.60000002" interpolationType="1" id="0:1219"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:1222">
-                    <KeyFrameDouble value="0.5" interpolationType="linear" id="0:1221"/>
+                    <KeyFrameDouble value="0.5" interpolationType="1" id="0:1221"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1003" id="0:1232">
                 <KeyedProperty propertyKey="18" id="0:1231">
-                    <KeyFrameDouble value="1" interpolationType="hold" id="0:1224"/>
-                    <KeyFrameDouble value="0" frame="3" interpolationType="hold" id="0:1225"/>
-                    <KeyFrameDouble value="1" frame="6" interpolationType="hold" id="0:1226"/>
-                    <KeyFrameDouble value="0" frame="9" interpolationType="hold" id="0:1227"/>
-                    <KeyFrameDouble value="1" frame="12" interpolationType="hold" id="0:1228"/>
-                    <KeyFrameDouble value="0" frame="15" interpolationType="hold" id="0:1229"/>
-                    <KeyFrameDouble value="0" frame="18" interpolationType="hold" id="0:1230"/>
+                    <KeyFrameDouble value="1" id="0:1224"/>
+                    <KeyFrameDouble frame="3" id="0:1225"/>
+                    <KeyFrameDouble value="1" frame="6" id="0:1226"/>
+                    <KeyFrameDouble frame="9" id="0:1227"/>
+                    <KeyFrameDouble value="1" frame="12" id="0:1228"/>
+                    <KeyFrameDouble frame="15" id="0:1229"/>
+                    <KeyFrameDouble frame="18" id="0:1230"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:1004" id="0:1237">
                 <KeyedProperty propertyKey="17" id="0:1236">
-                    <KeyFrameDouble value="0.12" interpolationType="linear" id="0:1233"/>
-                    <KeyFrameDouble value="0.12" frame="15" interpolationType="linear" id="0:1234"/>
-                    <KeyFrameDouble value="1" frame="18" interpolationType="linear" id="0:1235"/>
+                    <KeyFrameDouble value="0.12" interpolationType="1" id="0:1233"/>
+                    <KeyFrameDouble value="0.12" interpolationType="1" frame="15" id="0:1234"/>
+                    <KeyFrameDouble value="1" interpolationType="1" frame="18" id="0:1235"/>
                 </KeyedProperty>
             </KeyedObject>
         </LinearAnimation>
     </Artboard>
-
+    <DataConverterRangeMapper clampLower="true" clampUpper="true" minInput="0" maxOutput="2.5999999" name="Hunger To Pupil Width" id="0:1033"/>
     <DataEnumCustom name="SnakeHeadState" id="0:1024">
         <DataEnumValue key="idle" value="idle" id="0:1025"/>
         <DataEnumValue key="lunge" value="lunge" id="0:1026"/>
         <DataEnumValue key="eat" value="eat" id="0:1027"/>
         <DataEnumValue key="hit" value="hit" id="0:1028"/>
     </DataEnumCustom>
-
-    <!-- hunger 0..1 -> pupil width 1x..2.6x (a starving snake's pupils blow wide open) -->
-    <DataConverterRangeMapper minInput="0" maxInput="1" minOutput="1" maxOutput="2.6"
-                              clampLower="true" clampUpper="true" name="Hunger To Pupil Width" id="0:1033"/>
-
     <ViewModel defaultInstanceId="0:1032" name="SnakeHead" id="0:1029">
         <ViewModelPropertyEnumCustom enumId="0:1024" name="state" id="0:1030"/>
         <ViewModelPropertyNumber name="hunger" id="0:1031"/>
         <ViewModelInstance exports="true" name="Default" id="0:1032">
             <ViewModelInstanceEnum propertyValue="0:1025" viewModelPropertyId="0:1030" id="0:1311"/>
-            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:1031" id="0:1312"/>
+            <ViewModelInstanceNumber viewModelPropertyId="0:1031" id="0:1312"/>
         </ViewModelInstance>
     </ViewModel>
 </Rive>

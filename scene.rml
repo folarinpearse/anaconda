@@ -1,284 +1,313 @@
 <Rive version="1" kind="fragment">
-    <Artboard x="0" y="0" defaultStateMachineId="0:7" viewModelId="0:100" viewModelInstanceId="0:106" clip="true"
-              width="960" height="960" styleId="0:5" name="Anaconda" id="0:2">
+    <Artboard defaultStateMachineId="0:7" viewModelId="0:100" viewModelInstanceId="0:106" clip="true" width="960" height="960" styleId="0:5" name="Anaconda" id="0:2">
         <LayoutComponentStyle name="Artboard Style" id="0:5"/>
-
-        <!-- Screens: shown only while the game is not playing, over a scrim that
-             dims the board. Declared first so they draw on top (first sibling is
-             topmost). Each overlay and the scrim take their opacity from a number
-             in the Game view model that main.luau eases up and down, so they fade;
-             the stats block is shared by the three end screens. Placeholder
-             styling for the art pass to replace. Neither the text nor the scrim
-             is opaque to hits, so clicks still reach the playfield beneath. -->
         <Node opacity="0" name="Ready Screen" id="0:763">
-            <DataBindContext sourcePathIds="0:100-0:704" propertyKey="18" id="0:764"/>
-            <Text x="480" y="340" originX="0.5" originY="0.5" sizingValue="autoWidth" name="Ready Title" id="0:730">
+            <Text originX="0.5" originY="0.5" x="480" y="340" name="Ready Title" id="0:730">
                 <TextStylePaint fontSize="88" letterSpacing="8" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:731">
-                    <Fill name="Fill" id="0:732"><SolidColor colorValue="FF66CC6A" name="Color" id="0:733"/></Fill>
+                    <Fill name="Fill" id="0:732">
+                        <SolidColor colorValue="FF66CC6A" name="Color" id="0:733"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextValueRun styleId="0:731" text="ANACONDA" name="Run" id="0:734"/>
             </Text>
-            <Text x="480" y="430" originX="0.5" originY="0.5" sizingValue="autoWidth" name="Ready Hook" id="0:735">
+            <Text originX="0.5" originY="0.5" x="480" y="430" name="Ready Hook" id="0:735">
                 <TextStylePaint fontSize="26" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:736">
-                    <Fill name="Fill" id="0:737"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:738"/></Fill>
+                    <Fill name="Fill" id="0:737">
+                        <SolidColor colorValue="FFF2F4F8" name="Color" id="0:738"/>
+                    </Fill>
                 </TextStylePaint>
-                <TextValueRun styleId="0:736" text="The guests can run. You can't see." name="Run" id="0:739"/>
+                <TextValueRun styleId="0:736" text="The guests can run. You can&apos;t see." name="Run" id="0:739"/>
             </Text>
-            <Text x="480" y="520" originX="0.5" originY="0.5" sizingValue="autoWidth" name="Ready Steer" id="0:740">
+            <Text originX="0.5" originY="0.5" x="480" y="520" name="Ready Steer" id="0:740">
                 <TextStylePaint fontSize="20" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:741">
-                    <Fill name="Fill" id="0:742"><SolidColor colorValue="FF9099A8" name="Color" id="0:743"/></Fill>
+                    <Fill name="Fill" id="0:742">
+                        <SolidColor colorValue="FF9099A8" name="Color" id="0:743"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextStylePaint fontSize="20" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:744">
-                    <Fill name="Fill" id="0:745"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:746"/></Fill>
+                    <Fill name="Fill" id="0:745">
+                        <SolidColor colorValue="FFF2F4F8" name="Color" id="0:746"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextValueRun styleId="0:741" text="ARROWS / WASD   " name="Run" id="0:747"/>
                 <TextValueRun styleId="0:744" text="steer" name="Run" id="0:748"/>
             </Text>
-            <Text x="480" y="554" originX="0.5" originY="0.5" sizingValue="autoWidth" name="Ready Lunge" id="0:749">
+            <Text originX="0.5" originY="0.5" x="480" y="554" name="Ready Lunge" id="0:749">
                 <TextStylePaint fontSize="20" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:750">
-                    <Fill name="Fill" id="0:751"><SolidColor colorValue="FF9099A8" name="Color" id="0:752"/></Fill>
+                    <Fill name="Fill" id="0:751">
+                        <SolidColor colorValue="FF9099A8" name="Color" id="0:752"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextStylePaint fontSize="20" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:753">
-                    <Fill name="Fill" id="0:754"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:755"/></Fill>
+                    <Fill name="Fill" id="0:754">
+                        <SolidColor colorValue="FFF2F4F8" name="Color" id="0:755"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextValueRun styleId="0:750" text="SPACE / SHIFT / CLICK   " name="Run" id="0:756"/>
                 <TextValueRun styleId="0:753" text="lunge" name="Run" id="0:757"/>
             </Text>
-            <Text x="480" y="650" originX="0.5" originY="0.5" sizingValue="autoWidth" name="Ready Prompt" id="0:758">
+            <Text originX="0.5" originY="0.5" x="480" y="650" name="Ready Prompt" id="0:758">
                 <TextStylePaint fontSize="24" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:759">
-                    <Fill name="Fill" id="0:760"><SolidColor colorValue="FFFFD54F" name="Color" id="0:761"/></Fill>
+                    <Fill name="Fill" id="0:760">
+                        <SolidColor colorValue="FFFFD54F" name="Color" id="0:761"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextValueRun styleId="0:759" text="Click or press Space to start" name="Run" id="0:762"/>
             </Text>
+            <DataBindContext sourcePathIds="0:100-0:704" propertyKey="18" id="0:764"/>
         </Node>
         <Node opacity="0" name="Cleared Screen" id="0:770">
-            <DataBindContext sourcePathIds="0:100-0:705" propertyKey="18" id="0:771"/>
-            <Text x="480" y="340" originX="0.5" originY="0.5" sizingValue="autoWidth" name="Cleared Title" id="0:765">
+            <Text originX="0.5" originY="0.5" x="480" y="340" name="Cleared Title" id="0:765">
                 <TextStylePaint fontSize="52" letterSpacing="3" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:766">
-                    <Fill name="Fill" id="0:767"><SolidColor colorValue="FF66CC6A" name="Color" id="0:768"/></Fill>
+                    <Fill name="Fill" id="0:767">
+                        <SolidColor colorValue="FF66CC6A" name="Color" id="0:768"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextValueRun styleId="0:766" text="THE HOUSE IS QUIET" name="Run" id="0:769"/>
             </Text>
+            <DataBindContext sourcePathIds="0:100-0:705" propertyKey="18" id="0:771"/>
         </Node>
         <Node opacity="0" name="Walls Screen" id="0:777">
-            <DataBindContext sourcePathIds="0:100-0:706" propertyKey="18" id="0:778"/>
-            <Text x="480" y="340" originX="0.5" originY="0.5" sizingValue="autoWidth" name="Walls Title" id="0:772">
+            <Text originX="0.5" originY="0.5" x="480" y="340" name="Walls Title" id="0:772">
                 <TextStylePaint fontSize="52" letterSpacing="3" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:773">
-                    <Fill name="Fill" id="0:774"><SolidColor colorValue="FFEF5350" name="Color" id="0:775"/></Fill>
+                    <Fill name="Fill" id="0:774">
+                        <SolidColor colorValue="FFEF5350" name="Color" id="0:775"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextValueRun styleId="0:773" text="THE DARK TOOK YOU" name="Run" id="0:776"/>
             </Text>
+            <DataBindContext sourcePathIds="0:100-0:706" propertyKey="18" id="0:778"/>
         </Node>
         <Node opacity="0" name="Escaped Screen" id="0:784">
-            <DataBindContext sourcePathIds="0:100-0:707" propertyKey="18" id="0:785"/>
-            <Text x="480" y="340" originX="0.5" originY="0.5" sizingValue="autoWidth" name="Escaped Title" id="0:779">
+            <Text originX="0.5" originY="0.5" x="480" y="340" name="Escaped Title" id="0:779">
                 <TextStylePaint fontSize="52" letterSpacing="3" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:780">
-                    <Fill name="Fill" id="0:781"><SolidColor colorValue="FFFFB74D" name="Color" id="0:782"/></Fill>
+                    <Fill name="Fill" id="0:781">
+                        <SolidColor colorValue="FFFFB74D" name="Color" id="0:782"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextValueRun styleId="0:780" text="THEY GOT OUT" name="Run" id="0:783"/>
             </Text>
+            <DataBindContext sourcePathIds="0:100-0:707" propertyKey="18" id="0:785"/>
         </Node>
         <Node opacity="0" name="End Stats" id="0:841">
-            <DataBindContext sourcePathIds="0:100-0:708" propertyKey="18" id="0:842"/>
-            <Text x="480" y="430" originX="0.5" originY="0.5" sizingValue="autoWidth" name="Eaten Stat" id="0:786">
+            <Text originX="0.5" originY="0.5" x="480" y="430" name="Eaten Stat" id="0:786">
                 <TextStylePaint fontSize="24" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:787">
-                    <Fill name="Fill" id="0:788"><SolidColor colorValue="FF9099A8" name="Color" id="0:789"/></Fill>
+                    <Fill name="Fill" id="0:788">
+                        <SolidColor colorValue="FF9099A8" name="Color" id="0:789"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextStylePaint fontSize="24" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:790">
-                    <Fill name="Fill" id="0:791"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:792"/></Fill>
+                    <Fill name="Fill" id="0:791">
+                        <SolidColor colorValue="FFF2F4F8" name="Color" id="0:792"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextValueRun styleId="0:787" text="GUESTS EATEN   " name="Run" id="0:793"/>
                 <TextValueRun styleId="0:790" text="0" name="Run" id="0:794">
                     <DataBindContext sourcePathIds="0:100-0:700" propertyKey="268" converterId="0:120" id="0:795"/>
                 </TextValueRun>
             </Text>
-            <Text x="480" y="466" originX="0.5" originY="0.5" sizingValue="autoWidth" name="Escaped Stat" id="0:796">
+            <Text originX="0.5" originY="0.5" x="480" y="466" name="Escaped Stat" id="0:796">
                 <TextStylePaint fontSize="24" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:797">
-                    <Fill name="Fill" id="0:798"><SolidColor colorValue="FF9099A8" name="Color" id="0:799"/></Fill>
+                    <Fill name="Fill" id="0:798">
+                        <SolidColor colorValue="FF9099A8" name="Color" id="0:799"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextStylePaint fontSize="24" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:800">
-                    <Fill name="Fill" id="0:801"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:802"/></Fill>
+                    <Fill name="Fill" id="0:801">
+                        <SolidColor colorValue="FFF2F4F8" name="Color" id="0:802"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextValueRun styleId="0:797" text="ESCAPED   " name="Run" id="0:803"/>
                 <TextValueRun styleId="0:800" text="0" name="Run" id="0:804">
                     <DataBindContext sourcePathIds="0:100-0:104" propertyKey="268" converterId="0:120" id="0:805"/>
                 </TextValueRun>
             </Text>
-            <Text x="480" y="502" originX="0.5" originY="0.5" sizingValue="autoWidth" name="Time Stat" id="0:806">
+            <Text originX="0.5" originY="0.5" x="480" y="502" name="Time Stat" id="0:806">
                 <TextStylePaint fontSize="24" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:807">
-                    <Fill name="Fill" id="0:808"><SolidColor colorValue="FF9099A8" name="Color" id="0:809"/></Fill>
+                    <Fill name="Fill" id="0:808">
+                        <SolidColor colorValue="FF9099A8" name="Color" id="0:809"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextStylePaint fontSize="24" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:810">
-                    <Fill name="Fill" id="0:811"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:812"/></Fill>
+                    <Fill name="Fill" id="0:811">
+                        <SolidColor colorValue="FFF2F4F8" name="Color" id="0:812"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextValueRun styleId="0:807" text="TIME   " name="Run" id="0:813"/>
                 <TextValueRun styleId="0:810" text="0:00" name="Run" id="0:814">
                     <DataBindContext sourcePathIds="0:100-0:702" propertyKey="268" id="0:815"/>
                 </TextValueRun>
             </Text>
-            <Text x="480" y="538" originX="0.5" originY="0.5" sizingValue="autoWidth" name="Length Stat" id="0:816">
+            <Text originX="0.5" originY="0.5" x="480" y="538" name="Length Stat" id="0:816">
                 <TextStylePaint fontSize="24" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:817">
-                    <Fill name="Fill" id="0:818"><SolidColor colorValue="FF9099A8" name="Color" id="0:819"/></Fill>
+                    <Fill name="Fill" id="0:818">
+                        <SolidColor colorValue="FF9099A8" name="Color" id="0:819"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextStylePaint fontSize="24" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:820">
-                    <Fill name="Fill" id="0:821"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:822"/></Fill>
+                    <Fill name="Fill" id="0:821">
+                        <SolidColor colorValue="FFF2F4F8" name="Color" id="0:822"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextValueRun styleId="0:817" text="LENGTH   " name="Run" id="0:823"/>
                 <TextValueRun styleId="0:820" text="0" name="Run" id="0:824">
                     <DataBindContext sourcePathIds="0:100-0:102" propertyKey="268" converterId="0:120" id="0:825"/>
                 </TextValueRun>
             </Text>
-            <Text x="480" y="574" originX="0.5" originY="0.5" sizingValue="autoWidth" name="Score Stat" id="0:826">
+            <Text originX="0.5" originY="0.5" x="480" y="574" name="Score Stat" id="0:826">
                 <TextStylePaint fontSize="24" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:827">
-                    <Fill name="Fill" id="0:828"><SolidColor colorValue="FF9099A8" name="Color" id="0:829"/></Fill>
+                    <Fill name="Fill" id="0:828">
+                        <SolidColor colorValue="FF9099A8" name="Color" id="0:829"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextStylePaint fontSize="24" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:830">
-                    <Fill name="Fill" id="0:831"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:832"/></Fill>
+                    <Fill name="Fill" id="0:831">
+                        <SolidColor colorValue="FFF2F4F8" name="Color" id="0:832"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextValueRun styleId="0:827" text="SCORE   " name="Run" id="0:833"/>
                 <TextValueRun styleId="0:830" text="0" name="Run" id="0:834">
                     <DataBindContext sourcePathIds="0:100-0:101" propertyKey="268" converterId="0:120" id="0:835"/>
                 </TextValueRun>
             </Text>
-            <Text x="480" y="660" originX="0.5" originY="0.5" sizingValue="autoWidth" name="Restart Prompt" id="0:836">
+            <Text originX="0.5" originY="0.5" x="480" y="660" name="Restart Prompt" id="0:836">
                 <TextStylePaint fontSize="22" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:837">
-                    <Fill name="Fill" id="0:838"><SolidColor colorValue="FFFFD54F" name="Color" id="0:839"/></Fill>
+                    <Fill name="Fill" id="0:838">
+                        <SolidColor colorValue="FFFFD54F" name="Color" id="0:839"/>
+                    </Fill>
                 </TextStylePaint>
                 <TextValueRun styleId="0:837" text="Click or press Space to hunt again" name="Run" id="0:840"/>
             </Text>
+            <DataBindContext sourcePathIds="0:100-0:708" propertyKey="18" id="0:842"/>
         </Node>
-        <Shape x="0" y="0" opacity="0" name="Dim Scrim" id="0:843">
+        <Shape opacity="0" name="Dim Scrim" id="0:843">
             <Rectangle width="960" height="960" originX="0" originY="0" name="Path" id="0:844"/>
-            <Fill name="Fill" id="0:845"><SolidColor colorValue="FF000000" name="Color" id="0:846"/></Fill>
+            <Fill name="Fill" id="0:845">
+                <SolidColor colorValue="FF000000" name="Color" id="0:846"/>
+            </Fill>
             <DataBindContext sourcePathIds="0:100-0:709" propertyKey="18" converterId="0:900" id="0:847"/>
         </Shape>
-
-        <!-- HUD: RML text bound to the Game view model. Declared before the
-             playfield so it draws on top (first sibling is topmost). Each
-             readout sits in the top wall band (y 0-40). -->
-        <Text x="48" y="20" originX="0" originY="0.5" sizingValue="autoWidth" name="Score HUD" id="0:20">
+        <Text originY="0.5" x="48" y="20" name="Score HUD" id="0:20">
             <TextStylePaint fontSize="20" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:30">
-                <Fill name="Fill" id="0:121"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:122"/></Fill>
+                <Fill name="Fill" id="0:121">
+                    <SolidColor colorValue="FFF2F4F8" name="Color" id="0:122"/>
+                </Fill>
             </TextStylePaint>
             <TextValueRun styleId="0:30" text="SCORE " name="Label" id="0:123"/>
             <TextValueRun styleId="0:30" text="0" name="Value" id="0:124">
                 <DataBindContext sourcePathIds="0:100-0:101" propertyKey="268" converterId="0:120" id="0:125"/>
             </TextValueRun>
         </Text>
-
-        <Text x="196" y="20" originX="0" originY="0.5" sizingValue="autoWidth" name="Length HUD" id="0:21">
+        <Text originY="0.5" x="196" y="20" name="Length HUD" id="0:21">
             <TextStylePaint fontSize="20" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:31">
-                <Fill name="Fill" id="0:126"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:127"/></Fill>
+                <Fill name="Fill" id="0:126">
+                    <SolidColor colorValue="FFF2F4F8" name="Color" id="0:127"/>
+                </Fill>
             </TextStylePaint>
             <TextValueRun styleId="0:31" text="LENGTH " name="Label" id="0:128"/>
             <TextValueRun styleId="0:31" text="0" name="Value" id="0:129">
                 <DataBindContext sourcePathIds="0:100-0:102" propertyKey="268" converterId="0:120" id="0:130"/>
             </TextValueRun>
         </Text>
-
-        <Text x="346" y="20" originX="0" originY="0.5" sizingValue="autoWidth" name="People HUD" id="0:22">
+        <Text originY="0.5" x="346" y="20" name="People HUD" id="0:22">
             <TextStylePaint fontSize="20" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:32">
-                <Fill name="Fill" id="0:131"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:132"/></Fill>
+                <Fill name="Fill" id="0:131">
+                    <SolidColor colorValue="FFF2F4F8" name="Color" id="0:132"/>
+                </Fill>
             </TextStylePaint>
             <TextValueRun styleId="0:32" text="PEOPLE " name="Label" id="0:133"/>
             <TextValueRun styleId="0:32" text="0" name="Value" id="0:134">
                 <DataBindContext sourcePathIds="0:100-0:103" propertyKey="268" converterId="0:120" id="0:135"/>
             </TextValueRun>
         </Text>
-
-        <Text x="496" y="20" originX="0" originY="0.5" sizingValue="autoWidth" name="Escaped HUD" id="0:23">
+        <Text originY="0.5" x="496" y="20" name="Escaped HUD" id="0:23">
             <TextStylePaint fontSize="20" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:33">
-                <Fill name="Fill" id="0:136"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:137"/></Fill>
+                <Fill name="Fill" id="0:136">
+                    <SolidColor colorValue="FFF2F4F8" name="Color" id="0:137"/>
+                </Fill>
             </TextStylePaint>
             <TextValueRun styleId="0:33" text="ESCAPED " name="Label" id="0:138"/>
             <TextValueRun styleId="0:33" text="0" name="Value" id="0:139">
                 <DataBindContext sourcePathIds="0:100-0:104" propertyKey="268" converterId="0:120" id="0:140"/>
             </TextValueRun>
         </Text>
-
-        <!-- Health and boost, in the bottom wall band (y 920-960). Placeholder
-             look: a groove and a bound fill per bar. The rectangle's width is
-             what is bound, so each converter's output range must match the
-             groove width (120 for HP and vision, 200 for boost). Each fill is declared before its groove: the
-             first sibling is drawn on top. -->
-        <Text x="48" y="940" originX="0" originY="0.5" sizingValue="autoWidth" name="HP Label" id="0:600">
+        <Text originY="0.5" x="48" y="940" name="HP Label" id="0:600">
             <TextStylePaint fontSize="16" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:601">
-                <Fill name="Fill" id="0:602"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:603"/></Fill>
+                <Fill name="Fill" id="0:602">
+                    <SolidColor colorValue="FFF2F4F8" name="Color" id="0:603"/>
+                </Fill>
             </TextStylePaint>
             <TextValueRun styleId="0:601" text="HP" name="Label" id="0:604"/>
         </Text>
         <Shape x="84" y="940" name="HP Fill" id="0:615">
-            <Rectangle width="120" height="12" originX="0" originY="0.5"
-                       cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" name="Path" id="0:616">
+            <Rectangle cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" width="120" height="12" originX="0" name="Path" id="0:616">
                 <DataBindContext sourcePathIds="0:100-0:650" propertyKey="20" converterId="0:640" id="0:617"/>
             </Rectangle>
-            <Fill name="Fill" id="0:618"><SolidColor colorValue="FFE53935" name="Color" id="0:619"/></Fill>
+            <Fill name="Fill" id="0:618">
+                <SolidColor colorValue="FFE53935" name="Color" id="0:619"/>
+            </Fill>
         </Shape>
         <Shape x="84" y="940" name="HP Track" id="0:610">
-            <Rectangle width="120" height="12" originX="0" originY="0.5"
-                       cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" name="Path" id="0:611"/>
-            <Fill name="Fill" id="0:612"><SolidColor colorValue="FF2A2F3A" name="Color" id="0:613"/></Fill>
+            <Rectangle cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" width="120" height="12" originX="0" name="Path" id="0:611"/>
+            <Fill name="Fill" id="0:612">
+                <SolidColor colorValue="FF2A2F3A" name="Color" id="0:613"/>
+            </Fill>
         </Shape>
-
-        <Text x="232" y="940" originX="0" originY="0.5" sizingValue="autoWidth" name="Vision Label" id="0:670">
+        <Text originY="0.5" x="232" y="940" name="Vision Label" id="0:670">
             <TextStylePaint fontSize="16" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:671">
-                <Fill name="Fill" id="0:672"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:673"/></Fill>
+                <Fill name="Fill" id="0:672">
+                    <SolidColor colorValue="FFF2F4F8" name="Color" id="0:673"/>
+                </Fill>
             </TextStylePaint>
             <TextValueRun styleId="0:671" text="VISION" name="Label" id="0:674"/>
         </Text>
         <Shape x="298" y="940" name="Vision Fill" id="0:675">
-            <Rectangle width="120" height="12" originX="0" originY="0.5"
-                       cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" name="Path" id="0:676">
+            <Rectangle cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" width="120" height="12" originX="0" name="Path" id="0:676">
                 <DataBindContext sourcePathIds="0:100-0:651" propertyKey="20" converterId="0:642" id="0:677"/>
             </Rectangle>
-            <Fill name="Fill" id="0:678"><SolidColor colorValue="FF80CBC4" name="Color" id="0:679"/></Fill>
+            <Fill name="Fill" id="0:678">
+                <SolidColor colorValue="FF80CBC4" name="Color" id="0:679"/>
+            </Fill>
         </Shape>
         <Shape x="298" y="940" name="Vision Track" id="0:680">
-            <Rectangle width="120" height="12" originX="0" originY="0.5"
-                       cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" name="Path" id="0:681"/>
-            <Fill name="Fill" id="0:682"><SolidColor colorValue="FF2A2F3A" name="Color" id="0:683"/></Fill>
+            <Rectangle cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" width="120" height="12" originX="0" name="Path" id="0:681"/>
+            <Fill name="Fill" id="0:682">
+                <SolidColor colorValue="FF2A2F3A" name="Color" id="0:683"/>
+            </Fill>
         </Shape>
-
-        <Text x="640" y="940" originX="0" originY="0.5" sizingValue="autoWidth" name="Boost Label" id="0:620">
+        <Text originY="0.5" x="640" y="940" name="Boost Label" id="0:620">
             <TextStylePaint fontSize="16" fontAssetId="0:90" familyName="Inter" styleName="Regular" name="Style" id="0:621">
-                <Fill name="Fill" id="0:622"><SolidColor colorValue="FFF2F4F8" name="Color" id="0:623"/></Fill>
+                <Fill name="Fill" id="0:622">
+                    <SolidColor colorValue="FFF2F4F8" name="Color" id="0:623"/>
+                </Fill>
             </TextStylePaint>
             <TextValueRun styleId="0:621" text="BOOST" name="Label" id="0:624"/>
         </Text>
         <Shape x="712" y="940" name="Boost Fill" id="0:635">
-            <Rectangle width="200" height="12" originX="0" originY="0.5"
-                       cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" name="Path" id="0:636">
+            <Rectangle cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" width="200" height="12" originX="0" name="Path" id="0:636">
                 <DataBindContext sourcePathIds="0:100-0:653" propertyKey="20" converterId="0:641" id="0:637"/>
             </Rectangle>
-            <Fill name="Fill" id="0:638"><SolidColor colorValue="FFFFD54F" name="Color" id="0:639"/></Fill>
+            <Fill name="Fill" id="0:638">
+                <SolidColor colorValue="FFFFD54F" name="Color" id="0:639"/>
+            </Fill>
         </Shape>
         <Shape x="712" y="940" name="Boost Track" id="0:630">
-            <Rectangle width="200" height="12" originX="0" originY="0.5"
-                       cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" name="Path" id="0:631"/>
-            <Fill name="Fill" id="0:632"><SolidColor colorValue="FF2A2F3A" name="Color" id="0:633"/></Fill>
+            <Rectangle cornerRadiusTL="3" cornerRadiusTR="3" cornerRadiusBL="3" cornerRadiusBR="3" width="200" height="12" originX="0" name="Path" id="0:631"/>
+            <Fill name="Fill" id="0:632">
+                <SolidColor colorValue="FF2A2F3A" name="Color" id="0:633"/>
+            </Fill>
         </Shape>
-
-        <!-- Playfield: a fill-sized layout parent gives the script the artboard
-             size; FocusData is a direct child of the ScriptedLayout so it gets keys. -->
         <LayoutComponent width="960" height="960" styleId="0:11" name="Playfield Root" id="0:10">
-            <LayoutComponentStyle layoutWidthScaleType="fill" layoutHeightScaleType="fill"
-                                  name="Playfield Root Style" id="0:11"/>
+            <LayoutComponentStyle layoutWidthScaleType="1" layoutHeightScaleType="1" name="Playfield Root Style" id="0:11"/>
             <ScriptedLayout scriptAssetId="0:80" name="Anaconda Game" id="0:12">
                 <FocusData id="0:145"/>
-                <ScriptInputArtboard artboardId="0:200" name="person" id="0:529"/>
-                <ScriptInputArtboard artboardId="0:1000" name="snakeHead" id="0:1900"/>
+                <ScriptInputArtboard artboardId="0:200" dataTypeId="0:300" name="person" id="0:529"/>
+                <ScriptInputArtboard artboardId="0:1000" dataTypeId="0:1029" name="snakeHead" id="0:1900"/>
             </ScriptedLayout>
         </LayoutComponent>
-
         <Fill name="Background" id="0:146">
             <SolidColor colorValue="FF14171C" name="Color" id="0:147"/>
         </Fill>
-
-        <!-- Focus: only the CLI player focuses the first FocusData on its own; the
-             Editor and web/embed runtimes do not. Request it from the file:
-             on load (entry state below) and on every pointer down. targetId
-             names the node that owns the FocusData (the ScriptedLayout 0:12),
-             not the FocusData itself. -->
         <StateMachine name="State Machine 1" id="0:7">
             <StateMachineLayer name="Layer 1" id="0:8">
                 <AnyState x="200" y="-120" id="0:148"/>
@@ -286,64 +315,41 @@
                 <EntryState id="0:150">
                     <StateTransition stateToId="0:160" id="0:531"/>
                 </EntryState>
-                <AnimationState x="160" y="0" animationId="0:161" id="0:160">
-                    <FocusActionTarget targetId="0:12" id="0:532"/>
+                <AnimationState animationId="0:161" x="160" id="0:160">
+                    <FocusActionTarget targetId="0:12" flags="4" id="0:532"/>
                 </AnimationState>
             </StateMachineLayer>
-            <StateMachineListenerSingle listenerTypeValue="down" targetId="0:10" name="Focus On Press" id="0:162">
+            <StateMachineListenerSingle listenerTypeValue="2" targetId="0:10" name="Focus On Press" id="0:162">
                 <FocusActionTarget targetId="0:12" id="0:533"/>
             </StateMachineListenerSingle>
         </StateMachine>
-
         <LinearAnimation duration="1" name="Focus Hold" id="0:161"/>
     </Artboard>
-
-    <FontAsset file="Inter.ttf" name="Inter" id="0:90"/>
-    <!-- Pre-rendered playfield, 960x960 at 40 px per tile. main.luau looks them up
-         by name; nothing in this markup references them. -->
-    <ImageAsset file="Art/floor_base.png" name="floor_base" id="0:910"/>
-    <ImageAsset file="Art/walls_overlay.png" name="walls_overlay" id="0:911"/>
-    <!-- Modules register in document order: sim before whatever requires it. -->
-    <ScriptAsset file="config.luau" isModule="true" name="config" id="0:84"/>
-    <ScriptAsset file="level.luau" isModule="true" name="level" id="0:83"/>
-    <ScriptAsset file="fog.luau" isModule="true" name="fog" id="0:85"/>
-    <ScriptAsset file="sim.luau" isModule="true" name="sim" id="0:81"/>
-    <ScriptAsset file="sim_test.luau" name="sim_test" id="0:82"/>
-    <ScriptAsset file="main.luau" name="main" id="0:80"/>
-
-    <DataConverterToString decimals="0" round="true" name="To Text" id="0:120"/>
-
-    <!-- HP (0 to MAX_HP in config.luau) onto the 120px groove. -->
-    <DataConverterRangeMapper minInput="0" maxInput="5" minOutput="0" maxOutput="120"
-                              clampLower="true" clampUpper="true" name="HP To Width" id="0:640"/>
-    <!-- vision (0 to 1) onto the 120px groove. -->
-    <DataConverterRangeMapper minInput="0" maxInput="1" minOutput="0" maxOutput="120"
-                              clampLower="true" clampUpper="true" name="Vision To Width" id="0:642"/>
-    <!-- boostCooldown is 1 just after a lunge and 0 when ready: the fill grows
-         as the boost recharges, full = ready. -->
-    <DataConverterRangeMapper minInput="0" maxInput="1" minOutput="200" maxOutput="0"
-                              clampLower="true" clampUpper="true" name="Recharge To Width" id="0:641"/>
-
-    <!-- The dim scrim's opacity: the shown-screen fade (0 to 1) onto 0 to 0.72. -->
-    <DataConverterRangeMapper minInput="0" maxInput="1" minOutput="0" maxOutput="0.72"
-                              clampLower="true" clampUpper="true" name="Dim To Opacity" id="0:900"/>
-
+    <DataConverterRangeMapper clampLower="true" clampUpper="true" minInput="0" maxInput="5" minOutput="0" maxOutput="120" name="HP To Width" id="0:640"/>
+    <DataConverterRangeMapper clampLower="true" clampUpper="true" minInput="0" minOutput="200" maxOutput="0" name="Recharge To Width" id="0:641"/>
+    <DataConverterRangeMapper clampLower="true" clampUpper="true" minInput="0" minOutput="0" maxOutput="120" name="Vision To Width" id="0:642"/>
+    <DataConverterRangeMapper clampLower="true" clampUpper="true" minInput="0" minOutput="0" maxOutput="0.72000003" name="Dim To Opacity" id="0:900"/>
+    <DataConverterToString round="true" name="To Text" id="0:120"/>
     <DataEnumCustom name="GameState" id="0:110">
         <DataEnumValue key="ready" value="CLICK OR PRESS SPACE TO START" id="0:111"/>
         <DataEnumValue key="playing" value="PLAYING" id="0:112"/>
         <DataEnumValue key="won" value="YOU WIN - SPACE" id="0:113"/>
         <DataEnumValue key="lost" value="GAME OVER - SPACE" id="0:114"/>
     </DataEnumCustom>
-
-    <!-- Why the game ended. `cleared` is the win; `walls` and `escaped` are the
-         two ways to lose. `none` while the game is on. -->
     <DataEnumCustom name="EndReason" id="0:720">
         <DataEnumValue key="none" value="NONE" id="0:721"/>
         <DataEnumValue key="cleared" value="CLEARED" id="0:722"/>
         <DataEnumValue key="walls" value="WALLS" id="0:723"/>
         <DataEnumValue key="escaped" value="ESCAPED" id="0:724"/>
     </DataEnumCustom>
-
+    <FontAsset file="Inter.ttf" assetId="4228759" name="Inter" id="0:90"/>
+    <ImageAsset file="floor_base.png" height="960" width="960" assetId="7007413" name="floor_base" id="0:910"/>
+    <ImageAsset file="walls_overlay.png" height="960" width="960" assetId="7007416" name="walls_overlay" id="0:911"/>
+    <ScriptAsset file="main.luau" dependencyIds="0:83-0:84-0:81-0:85" compilationOrder="6" serializedImplementedMethods="70409" scriptProtocolValue="2" name="main" id="0:80"/>
+    <ScriptAsset file="sim.luau" isModule="true" dependencyIds="0:84" compilationOrder="4" name="sim" id="0:81"/>
+    <ScriptAsset file="level.luau" isModule="true" name="level" id="0:83"/>
+    <ScriptAsset file="config.luau" isModule="true" compilationOrder="2" name="config" id="0:84"/>
+    <ScriptAsset file="fog.luau" isModule="true" dependencyIds="0:84" compilationOrder="5" name="fog" id="0:85"/>
     <ViewModel defaultInstanceId="0:106" name="Game" id="0:100">
         <ViewModelPropertyNumber name="score" id="0:101"/>
         <ViewModelPropertyNumber name="length" id="0:102"/>
@@ -355,11 +361,9 @@
         <ViewModelPropertyNumber name="boostCooldown" id="0:653"/>
         <ViewModelPropertyEnumCustom enumId="0:110" name="gameState" id="0:105"/>
         <ViewModelPropertyNumber name="eaten" id="0:700"/>
-        <ViewModelPropertyNumber name="elapsedTime" id="0:701"/> <!-- seconds of play -->
-        <ViewModelPropertyString name="timeText" id="0:702"/> <!-- elapsedTime as m:ss -->
+        <ViewModelPropertyNumber name="elapsedTime" id="0:701"/>
+        <ViewModelPropertyString name="timeText" id="0:702"/>
         <ViewModelPropertyEnumCustom enumId="0:720" name="endReason" id="0:703"/>
-        <!-- Overlay opacities, 0 to 1, eased by main.luau. endAlpha is the stats
-             block under the three end screens, dimAlpha the scrim over the board. -->
         <ViewModelPropertyNumber name="readyAlpha" id="0:704"/>
         <ViewModelPropertyNumber name="clearedAlpha" id="0:705"/>
         <ViewModelPropertyNumber name="wallsAlpha" id="0:706"/>
@@ -367,25 +371,25 @@
         <ViewModelPropertyNumber name="endAlpha" id="0:708"/>
         <ViewModelPropertyNumber name="dimAlpha" id="0:709"/>
         <ViewModelInstance exports="true" name="Default" id="0:106">
-            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:101" id="0:151"/>
+            <ViewModelInstanceNumber viewModelPropertyId="0:101" id="0:151"/>
             <ViewModelInstanceNumber propertyValue="5" viewModelPropertyId="0:102" id="0:152"/>
             <ViewModelInstanceNumber propertyValue="6" viewModelPropertyId="0:103" id="0:153"/>
-            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:104" id="0:154"/>
+            <ViewModelInstanceNumber viewModelPropertyId="0:104" id="0:154"/>
+            <ViewModelInstanceEnum propertyValue="0:111" playbackValue="0:0" viewModelPropertyId="0:105" id="0:155"/>
             <ViewModelInstanceNumber propertyValue="5" viewModelPropertyId="0:650" id="0:660"/>
             <ViewModelInstanceNumber propertyValue="1" viewModelPropertyId="0:651" id="0:661"/>
             <ViewModelInstanceBoolean propertyValue="true" viewModelPropertyId="0:652" id="0:662"/>
-            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:653" id="0:663"/>
-            <ViewModelInstanceEnum propertyValue="0:111" viewModelPropertyId="0:105" id="0:155"/>
-            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:700" id="0:710"/>
-            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:701" id="0:711"/>
+            <ViewModelInstanceNumber viewModelPropertyId="0:653" id="0:663"/>
+            <ViewModelInstanceNumber viewModelPropertyId="0:700" id="0:710"/>
+            <ViewModelInstanceNumber viewModelPropertyId="0:701" id="0:711"/>
             <ViewModelInstanceString propertyValue="0:00" viewModelPropertyId="0:702" id="0:712"/>
             <ViewModelInstanceEnum propertyValue="0:721" viewModelPropertyId="0:703" id="0:713"/>
-            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:704" id="0:714"/>
-            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:705" id="0:715"/>
-            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:706" id="0:716"/>
-            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:707" id="0:717"/>
-            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:708" id="0:718"/>
-            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:709" id="0:719"/>
+            <ViewModelInstanceNumber viewModelPropertyId="0:704" id="0:714"/>
+            <ViewModelInstanceNumber viewModelPropertyId="0:705" id="0:715"/>
+            <ViewModelInstanceNumber viewModelPropertyId="0:706" id="0:716"/>
+            <ViewModelInstanceNumber viewModelPropertyId="0:707" id="0:717"/>
+            <ViewModelInstanceNumber viewModelPropertyId="0:708" id="0:718"/>
+            <ViewModelInstanceNumber viewModelPropertyId="0:709" id="0:719"/>
         </ViewModelInstance>
     </ViewModel>
 </Rive>

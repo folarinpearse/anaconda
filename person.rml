@@ -1,42 +1,37 @@
 <Rive version="1" kind="fragment">
-    <!-- Person: a 32x32 guest with placeholder art. Its state machine plays one
-         visibly different animation per value of the `state` enum on its own
-         view model; the game script instances it once per P marker and writes
-         that enum. Rig is anchored at the feet (16,29). -->
-    <Artboard x="1100" y="0" defaultStateMachineId="0:227" viewModelId="0:300" viewModelInstanceId="0:302"
-              width="32" height="32" styleId="0:205" name="Person" id="0:200">
+    <Artboard defaultStateMachineId="0:227" viewModelId="0:300" viewModelInstanceId="0:302" width="32" height="32" styleId="0:205" x="1100" name="Person" id="0:200">
         <LayoutComponentStyle name="Person Style" id="0:205"/>
-
         <Node x="16" y="29" name="Rig" id="0:210">
-            <!-- first sibling draws on top: bang, head, body -->
             <Node x="12" y="-21" name="Bang" id="0:211">
                 <Shape y="-4" name="Bang Bar" id="0:212">
-                    <Rectangle width="4" height="9" cornerRadiusTL="1" cornerRadiusTR="1" cornerRadiusBL="1" cornerRadiusBR="1" name="Path" id="0:316"/>
-                    <Fill name="Fill" id="0:317"><SolidColor colorValue="FFFFD54F" name="Color" id="0:318"/></Fill>
+                    <Rectangle cornerRadiusTL="1" cornerRadiusTR="1" cornerRadiusBL="1" cornerRadiusBR="1" width="4" height="9" name="Path" id="0:316"/>
+                    <Fill name="Fill" id="0:317">
+                        <SolidColor colorValue="FFFFD54F" name="Color" id="0:318"/>
+                    </Fill>
                 </Shape>
                 <Shape y="3.5" name="Bang Dot" id="0:213">
-                    <Rectangle width="4" height="4" cornerRadiusTL="1" cornerRadiusTR="1" cornerRadiusBL="1" cornerRadiusBR="1" name="Path" id="0:319"/>
-                    <Fill name="Fill" id="0:320"><SolidColor colorValue="FFFFD54F" name="Color" id="0:321"/></Fill>
+                    <Rectangle cornerRadiusTL="1" cornerRadiusTR="1" cornerRadiusBL="1" cornerRadiusBR="1" width="4" height="4" name="Path" id="0:319"/>
+                    <Fill name="Fill" id="0:320">
+                        <SolidColor colorValue="FFFFD54F" name="Color" id="0:321"/>
+                    </Fill>
                 </Shape>
             </Node>
             <Shape y="-21" name="Head" id="0:214">
                 <Ellipse width="13" height="13" name="Path" id="0:322"/>
-                <Fill name="Fill" id="0:323"><SolidColor colorValue="FF8AB4F8" name="Color" id="0:324"/></Fill>
+                <Fill name="Fill" id="0:323">
+                    <SolidColor colorValue="FF8AB4F8" name="Color" id="0:324"/>
+                </Fill>
             </Shape>
             <Shape y="-8" name="Body" id="0:215">
                 <Ellipse width="17" height="17" name="Path" id="0:325"/>
-                <Fill name="Fill" id="0:326"><SolidColor colorValue="FF4285F4" name="Color" id="0:327"/></Fill>
+                <Fill name="Fill" id="0:326">
+                    <SolidColor colorValue="FF4285F4" name="Color" id="0:327"/>
+                </Fill>
             </Shape>
         </Node>
-
         <StateMachine name="State Machine 1" id="0:227">
             <StateMachineLayer name="Layer 1" id="0:228">
-                <AnyState x="0" y="-160" id="0:328"/>
-                <ExitState x="0" y="-80" id="0:329"/>
-                <EntryState x="0" y="0" id="0:330">
-                    <StateTransition stateToId="0:230" id="0:331"/>
-                </EntryState>
-                <AnimationState x="220" y="0" animationId="0:220" reset="true" id="0:230">
+                <AnimationState animationId="0:220" x="220" reset="true" id="0:230">
                     <StateTransition stateToId="0:231" duration="80" id="0:332">
                         <TransitionViewModelCondition id="0:333">
                             <TransitionPropertyViewModelComparator id="0:334">
@@ -78,7 +73,7 @@
                         </TransitionViewModelCondition>
                     </StateTransition>
                 </AnimationState>
-                <AnimationState x="440" y="0" animationId="0:221" reset="true" id="0:231">
+                <AnimationState animationId="0:221" x="440" reset="true" id="0:231">
                     <StateTransition stateToId="0:230" duration="80" id="0:356">
                         <TransitionViewModelCondition id="0:357">
                             <TransitionPropertyViewModelComparator id="0:358">
@@ -120,7 +115,7 @@
                         </TransitionViewModelCondition>
                     </StateTransition>
                 </AnimationState>
-                <AnimationState x="660" y="0" animationId="0:222" reset="true" id="0:232">
+                <AnimationState animationId="0:222" x="660" reset="true" id="0:232">
                     <StateTransition stateToId="0:230" duration="80" id="0:380">
                         <TransitionViewModelCondition id="0:381">
                             <TransitionPropertyViewModelComparator id="0:382">
@@ -162,7 +157,7 @@
                         </TransitionViewModelCondition>
                     </StateTransition>
                 </AnimationState>
-                <AnimationState x="880" y="0" animationId="0:223" reset="true" id="0:233">
+                <AnimationState animationId="0:223" x="880" reset="true" id="0:233">
                     <StateTransition stateToId="0:230" duration="80" id="0:404">
                         <TransitionViewModelCondition id="0:405">
                             <TransitionPropertyViewModelComparator id="0:406">
@@ -204,167 +199,169 @@
                         </TransitionViewModelCondition>
                     </StateTransition>
                 </AnimationState>
-                <AnimationState x="1100" y="0" animationId="0:224" reset="true" id="0:234">
-                </AnimationState>
+                <AnimationState animationId="0:224" x="1100" reset="true" id="0:234"/>
+                <AnyState y="-160" id="0:328"/>
+                <ExitState y="-80" id="0:329"/>
+                <EntryState id="0:330">
+                    <StateTransition stateToId="0:230" id="0:331"/>
+                </EntryState>
             </StateMachineLayer>
         </StateMachine>
-
-        <LinearAnimation duration="60" loopValue="loop" name="Idle bob" id="0:220">
+        <LinearAnimation loopValue="1" name="Idle bob" id="0:220">
             <KeyedObject objectId="0:210" id="0:428">
                 <KeyedProperty propertyKey="13" id="0:429">
-                    <KeyFrameDouble value="16" interpolationType="linear" id="0:430"/>
+                    <KeyFrameDouble value="16" interpolationType="1" id="0:430"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="14" id="0:431">
-                    <KeyFrameDouble value="29" frame="0" interpolationType="linear" id="0:432"/>
-                    <KeyFrameDouble value="27" frame="30" interpolationType="linear" id="0:433"/>
-                    <KeyFrameDouble value="29" frame="60" interpolationType="linear" id="0:434"/>
+                    <KeyFrameDouble value="29" interpolationType="1" id="0:432"/>
+                    <KeyFrameDouble value="27" interpolationType="1" frame="30" id="0:433"/>
+                    <KeyFrameDouble value="29" interpolationType="1" frame="60" id="0:434"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="15" id="0:435">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:436"/>
+                    <KeyFrameDouble interpolationType="1" id="0:436"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="16" id="0:437">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:438"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:438"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:439">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:440"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:440"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:211" id="0:441">
                 <KeyedProperty propertyKey="16" id="0:442">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:443"/>
+                    <KeyFrameDouble interpolationType="1" id="0:443"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:444">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:445"/>
+                    <KeyFrameDouble interpolationType="1" id="0:445"/>
                 </KeyedProperty>
             </KeyedObject>
         </LinearAnimation>
-        <LinearAnimation duration="40" loopValue="loop" name="Wander sway" id="0:221">
+        <LinearAnimation duration="40" loopValue="1" name="Wander sway" id="0:221">
             <KeyedObject objectId="0:210" id="0:446">
                 <KeyedProperty propertyKey="13" id="0:447">
-                    <KeyFrameDouble value="16" interpolationType="linear" id="0:448"/>
+                    <KeyFrameDouble value="16" interpolationType="1" id="0:448"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="14" id="0:449">
-                    <KeyFrameDouble value="29" frame="0" interpolationType="linear" id="0:450"/>
-                    <KeyFrameDouble value="27.5" frame="10" interpolationType="linear" id="0:451"/>
-                    <KeyFrameDouble value="29" frame="20" interpolationType="linear" id="0:452"/>
-                    <KeyFrameDouble value="27.5" frame="30" interpolationType="linear" id="0:453"/>
-                    <KeyFrameDouble value="29" frame="40" interpolationType="linear" id="0:454"/>
+                    <KeyFrameDouble value="29" interpolationType="1" id="0:450"/>
+                    <KeyFrameDouble value="27.5" interpolationType="1" frame="10" id="0:451"/>
+                    <KeyFrameDouble value="29" interpolationType="1" frame="20" id="0:452"/>
+                    <KeyFrameDouble value="27.5" interpolationType="1" frame="30" id="0:453"/>
+                    <KeyFrameDouble value="29" interpolationType="1" frame="40" id="0:454"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="15" id="0:455">
-                    <KeyFrameDouble value="-0.12" frame="0" interpolationType="linear" id="0:456"/>
-                    <KeyFrameDouble value="0.12" frame="20" interpolationType="linear" id="0:457"/>
-                    <KeyFrameDouble value="-0.12" frame="40" interpolationType="linear" id="0:458"/>
+                    <KeyFrameDouble value="-0.12" interpolationType="1" id="0:456"/>
+                    <KeyFrameDouble value="0.12" interpolationType="1" frame="20" id="0:457"/>
+                    <KeyFrameDouble value="-0.12" interpolationType="1" frame="40" id="0:458"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="16" id="0:459">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:460"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:460"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:461">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:462"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:462"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:211" id="0:463">
                 <KeyedProperty propertyKey="16" id="0:464">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:465"/>
+                    <KeyFrameDouble interpolationType="1" id="0:465"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:466">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:467"/>
+                    <KeyFrameDouble interpolationType="1" id="0:467"/>
                 </KeyedProperty>
             </KeyedObject>
         </LinearAnimation>
-        <LinearAnimation duration="24" loopValue="loop" name="Alert jump" id="0:222">
+        <LinearAnimation duration="24" loopValue="1" name="Alert jump" id="0:222">
             <KeyedObject objectId="0:210" id="0:468">
                 <KeyedProperty propertyKey="13" id="0:469">
-                    <KeyFrameDouble value="16" interpolationType="linear" id="0:470"/>
+                    <KeyFrameDouble value="16" interpolationType="1" id="0:470"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="14" id="0:471">
-                    <KeyFrameDouble value="29" frame="0" interpolationType="linear" id="0:472"/>
-                    <KeyFrameDouble value="19" frame="8" interpolationType="linear" id="0:473"/>
-                    <KeyFrameDouble value="29" frame="16" interpolationType="linear" id="0:474"/>
-                    <KeyFrameDouble value="29" frame="24" interpolationType="linear" id="0:475"/>
+                    <KeyFrameDouble value="29" interpolationType="1" id="0:472"/>
+                    <KeyFrameDouble value="19" interpolationType="1" frame="8" id="0:473"/>
+                    <KeyFrameDouble value="29" interpolationType="1" frame="16" id="0:474"/>
+                    <KeyFrameDouble value="29" interpolationType="1" frame="24" id="0:475"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="15" id="0:476">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:477"/>
+                    <KeyFrameDouble interpolationType="1" id="0:477"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="16" id="0:478">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:479"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:479"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:480">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:481"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:481"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:211" id="0:482">
                 <KeyedProperty propertyKey="16" id="0:483">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:484"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:484"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:485">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:486"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:486"/>
                 </KeyedProperty>
             </KeyedObject>
         </LinearAnimation>
-        <LinearAnimation duration="10" loopValue="loop" name="Flee wobble" id="0:223">
+        <LinearAnimation duration="10" loopValue="1" name="Flee wobble" id="0:223">
             <KeyedObject objectId="0:210" id="0:487">
                 <KeyedProperty propertyKey="13" id="0:488">
-                    <KeyFrameDouble value="14.5" frame="0" interpolationType="linear" id="0:489"/>
-                    <KeyFrameDouble value="17.5" frame="5" interpolationType="linear" id="0:490"/>
-                    <KeyFrameDouble value="14.5" frame="10" interpolationType="linear" id="0:491"/>
+                    <KeyFrameDouble value="14.5" interpolationType="1" id="0:489"/>
+                    <KeyFrameDouble value="17.5" interpolationType="1" frame="5" id="0:490"/>
+                    <KeyFrameDouble value="14.5" interpolationType="1" frame="10" id="0:491"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="14" id="0:492">
-                    <KeyFrameDouble value="29" frame="0" interpolationType="linear" id="0:493"/>
-                    <KeyFrameDouble value="27" frame="5" interpolationType="linear" id="0:494"/>
-                    <KeyFrameDouble value="29" frame="10" interpolationType="linear" id="0:495"/>
+                    <KeyFrameDouble value="29" interpolationType="1" id="0:493"/>
+                    <KeyFrameDouble value="27" interpolationType="1" frame="5" id="0:494"/>
+                    <KeyFrameDouble value="29" interpolationType="1" frame="10" id="0:495"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="15" id="0:496">
-                    <KeyFrameDouble value="-0.4" frame="0" interpolationType="linear" id="0:497"/>
-                    <KeyFrameDouble value="0.4" frame="5" interpolationType="linear" id="0:498"/>
-                    <KeyFrameDouble value="-0.4" frame="10" interpolationType="linear" id="0:499"/>
+                    <KeyFrameDouble value="-0.40000001" interpolationType="1" id="0:497"/>
+                    <KeyFrameDouble value="0.40000001" interpolationType="1" frame="5" id="0:498"/>
+                    <KeyFrameDouble value="-0.40000001" interpolationType="1" frame="10" id="0:499"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="16" id="0:500">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:501"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:501"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:502">
-                    <KeyFrameDouble value="1" interpolationType="linear" id="0:503"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:503"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:211" id="0:504">
                 <KeyedProperty propertyKey="16" id="0:505">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:506"/>
+                    <KeyFrameDouble interpolationType="1" id="0:506"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:507">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:508"/>
+                    <KeyFrameDouble interpolationType="1" id="0:508"/>
                 </KeyedProperty>
             </KeyedObject>
         </LinearAnimation>
-        <LinearAnimation duration="15" loopValue="oneShot" name="Caught shrink" id="0:224">
+        <LinearAnimation duration="15" name="Caught shrink" id="0:224">
             <KeyedObject objectId="0:210" id="0:509">
                 <KeyedProperty propertyKey="13" id="0:510">
-                    <KeyFrameDouble value="16" interpolationType="linear" id="0:511"/>
+                    <KeyFrameDouble value="16" interpolationType="1" id="0:511"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="14" id="0:512">
-                    <KeyFrameDouble value="29" interpolationType="linear" id="0:513"/>
+                    <KeyFrameDouble value="29" interpolationType="1" id="0:513"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="15" id="0:514">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:515"/>
+                    <KeyFrameDouble interpolationType="1" id="0:515"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="16" id="0:516">
-                    <KeyFrameDouble value="1" frame="0" interpolationType="linear" id="0:517"/>
-                    <KeyFrameDouble value="0" frame="15" interpolationType="linear" id="0:518"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:517"/>
+                    <KeyFrameDouble interpolationType="1" frame="15" id="0:518"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:519">
-                    <KeyFrameDouble value="1" frame="0" interpolationType="linear" id="0:520"/>
-                    <KeyFrameDouble value="0" frame="15" interpolationType="linear" id="0:521"/>
+                    <KeyFrameDouble value="1" interpolationType="1" id="0:520"/>
+                    <KeyFrameDouble interpolationType="1" frame="15" id="0:521"/>
                 </KeyedProperty>
             </KeyedObject>
             <KeyedObject objectId="0:211" id="0:522">
                 <KeyedProperty propertyKey="16" id="0:523">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:524"/>
+                    <KeyFrameDouble interpolationType="1" id="0:524"/>
                 </KeyedProperty>
                 <KeyedProperty propertyKey="17" id="0:525">
-                    <KeyFrameDouble value="0" interpolationType="linear" id="0:526"/>
+                    <KeyFrameDouble interpolationType="1" id="0:526"/>
                 </KeyedProperty>
             </KeyedObject>
         </LinearAnimation>
     </Artboard>
-
     <DataEnumCustom name="PersonState" id="0:310">
         <DataEnumValue key="idle" value="idle" id="0:311"/>
         <DataEnumValue key="wander" value="wander" id="0:312"/>
@@ -372,7 +369,7 @@
         <DataEnumValue key="flee" value="flee" id="0:314"/>
         <DataEnumValue key="caught" value="caught" id="0:315"/>
     </DataEnumCustom>
-
+    <ShaderAsset file="vision.wgsl" name="vision" id="0:1901"/>
     <ViewModel defaultInstanceId="0:302" name="Person" id="0:300">
         <ViewModelPropertyEnumCustom enumId="0:310" name="state" id="0:301"/>
         <ViewModelInstance exports="true" name="Default" id="0:302">
