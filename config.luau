@@ -172,4 +172,61 @@ return {
 
     -- The snake
     HEAD_LIGHT_TIME = 0.12, -- seconds, time constant of the head's light
+
+    -- Guests (guestfx.luau): how the Person artboard is brought to life. Visuals
+    -- only; none of this touches the sim.
+    GUEST_FX_ENABLED = true, -- false: guests are drawn as before (no turning, shadows, drops or items)
+    GUEST_SCALE = 0.9, -- the Size node's scale in person.rml: keep in step
+
+    -- Heading. Travel direction comes from a smoothed velocity; a guest counts
+    -- as moving above GUEST_MOVE_SPEED, so frame jitter never turns it.
+    GUEST_VELOCITY_TIME = 0.1, -- seconds, time constant of the smoothed velocity
+    GUEST_MOVE_SPEED = 8, -- px/s
+    GUEST_TURN_RATE = 10, -- rad/s, walking and standing
+    GUEST_FLEE_TURN_RATE = 18, -- rad/s, fleeing
+    GUEST_BIG_TURN = 1.2, -- rad: past this angle to the target...
+    GUEST_BIG_TURN_BOOST = 3, -- ...the turn rate is multiplied by this
+    GUEST_CHAT_RANGE = 3, -- tiles: a standing guest faces the nearest standing guest this close
+    GUEST_DANCE_COLS = { 10, 13 }, -- the dance floor, first and last tile
+    GUEST_DANCE_ROWS = { 11, 14 },
+    GUEST_HEADING_CHECK_TIME = 5, -- seconds of a run in which the heading error is logged...
+    GUEST_HEADING_CHECK_AFTER = 0.15, -- ...for guests moving at least this long...
+    GUEST_HEADING_TOLERANCE = 0.5, -- ...and the most it may be off, rad
+
+    -- Head turn (lookAngle, relative to the heading)
+    GUEST_LOOK_LIMIT = 1.2, -- rad
+    GUEST_LOOK_TIME = 0.1, -- seconds, time constant
+    GUEST_CHAT_GLANCE = 0.5, -- rad: idle and chatting guests glance up to this far...
+    GUEST_CHAT_GLANCE_GAP = { 2, 4 }, -- ...this many seconds apart
+    GUEST_FLEE_GLANCE_TIME = 0.25, -- seconds a fleeing guest looks back at the snake...
+    GUEST_FLEE_GLANCE_GAP = { 0.8, 1.4 }, -- ...this many seconds apart
+
+    -- Animation
+    GUEST_DESYNC = 4, -- seconds: a new instance is advanced by 0 to this much
+    GUEST_STEP_MIN = 0.6, -- walk and run cycles run at actual / nominal speed, clamped
+    GUEST_STEP_MAX = 1.6,
+    GUEST_CAUGHT_ANIM = 0.5, -- seconds the Caught animation takes (30 frames)
+
+    -- Light and shadow
+    GUEST_LIGHT_TIME = 0.12, -- seconds, time constant of a guest's light
+    GUEST_SHADOW_SIZE = { 22, 26 }, -- px along x across, at Size scale 1
+    GUEST_SHADOW_FADE = 0.5, -- seconds, from the catch, for the shadow to go out
+
+    -- Flee reactions
+    GUEST_ALERT_DROP_CHANCE = 0.5, -- a guest holding a drink drops it on alert with this odds
+    GUEST_HAND = { 6, 10 }, -- px, in the guest's own frame at Size scale 1
+    GUEST_CUP_SPEED = { 40, 70 }, -- px/s at the throw
+    GUEST_CUP_TIME = 0.35, -- seconds to come to rest
+    GUEST_CUP_SPIN = { 6, 10 }, -- rad/s at the throw, decaying with the speed
+    GUEST_SPILL_OFFSET = 7, -- px from the resting cup, along its mouth, to the spill's centre
+    GUEST_SPILL_FROM = 0.2, -- spill scale at first...
+    GUEST_SPILL_GROW = 0.4, -- ...to 1 over this many seconds
+    GUEST_ITEM_DELAY = 0.35, -- seconds after a catch before the costume is left behind
+    GUEST_ITEM_PUSH = 6, -- px away from the snake's head
+    GUEST_ITEM_FROM = 0.8, -- item scale at first...
+    GUEST_ITEM_POP = 0.15, -- ...to 1 over this many seconds
+    GUEST_MAX_SPILLS = 40, -- cups and spills together
+    GUEST_MAX_ITEMS = 12,
+    GUEST_DECAL_FADE = 0.5, -- seconds the oldest decal takes to go when over the cap
+    GUEST_DEBUG_HIDE = 2, -- debug K: seconds past its stand-in that the real guest stays out of sight
 }

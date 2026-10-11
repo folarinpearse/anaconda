@@ -11,6 +11,7 @@ local Fog = require('fog')
 local Lighting = require('lighting')
 local Flicker = require('flicker')
 local BodyPath = require('bodypath')
+local GuestFx = require('guestfx')
 local LEVEL = require('level')
 
 type Cell = Sim.Cell
@@ -40,7 +41,8 @@ type Game = {
     person: Input<Artboard<Data.Person>>,
     snakeHead: Input<Artboard<Data.SnakeHead>>,
     sim: Sim.Sim,
-    people: { [number]: PersonRec },
+    people: { [number]: PersonRec }, -- used only with GUEST_FX_ENABLED off
+    fx: GuestFx.Fx, -- the guests' visuals: heading, light, shadows, drops (guestfx.luau)
     head: Artboard<Data.SnakeHead>?, -- the one SnakeHead instance, made on the first advance
     headState: HeadState, -- the state last written to it
     floorImage: Image?, -- art/floor_base.png: the floor plan with walls and lighting baked in
@@ -173,6 +175,8 @@ local KEY_DIRS: { [number]: Cell } = {
 local KEY_SPACE = 32
 local KEY_F = 70 -- debug: held, every light group runs its event back to back
 local KEY_C = 67 -- debug: held, chase tension is 1
+local KEY_G = 71 -- debug: held, every guest is shown fleeing (visuals only)
+local KEY_K = 75 -- debug: the guest nearest the head is shown caught (a stand-in; visuals only)
 local KEY_SHIFTS: { [number]: boolean } = { [340] = true, [344] = true } -- left, right
 local SHAKE_AMPLITUDE = 5 -- px at the moment of impact
 -- px the drawn head leans into a bump, at its peak. Interior wall art sits back
@@ -368,6 +372,7 @@ end
 -- and ending; this clears what main keeps on top of that.
 local function restart(self: Game)
     self.people = {}
+    GuestFx.reset(self.fx)
     Sim.reset(self.sim, 'playing')
     self.rings = Fog.newRings()
     Flicker.reset(self.lights)
@@ -404,6 +409,7 @@ function init(self: Game, context: Context): boolean
     if self.floorImage == nil or self.wallsImage == nil then
         print('playfield art not found: floor_base / walls_overlay')
     end
+    GuestFx.load(self.fx, context)
     self.skinImage = context:image('snake_skin')
     self.lightImage = context:image('snake_light')
     self.flickerImage = context:image('flicker_mask')
@@ -447,6 +453,15 @@ function resize(self: Game, size: Vector, scale: number)
 end
 
 function keyboardEvent(self: Game, event: KeyboardEvent): boolean
+    if event.key == KEY_G then
+        GuestFx.setHoldFlee(self.fx, event.phase ~= 'up')
+        return true
+    elseif event.key == KEY_K then
+        if event.phase == 'down' then
+            GuestFx.catchNearest(self.fx, self.person)
+        end
+        return true
+    end
     if event.key == KEY_F or event.key == KEY_C then
         local held = event.phase ~= 'up'
         if event.key == KEY_F then
@@ -691,7 +706,12 @@ function advance(self: Game, seconds: number): boolean
     -- still the game: the last guest finishes being eaten and the floor lights up.)
     local live = sim.state == 'playing'
     local liveSeconds = if live then seconds else 0
-    syncPeople(self, liveSeconds)
+    if Config.GUEST_FX_ENABLED then
+        local hx, hy = headTile(sim)
+        GuestFx.update(self.fx, sim, self.person, liveSeconds, guestAlphaOf(sim), hx * TILE, hy * TILE)
+    else
+        syncPeople(self, liveSeconds)
+    end
     syncHead(self, liveSeconds)
     stepShadowLift(self, seconds)
     publish(self)
@@ -953,15 +973,21 @@ local function drawWorld(self: Game, r: Renderer)
     end
     r:drawPath(self.exitPath, self.exitPaint)
 
-    local guestAlpha = guestAlphaOf(sim)
-    for _, g in sim.guests do
-        local rec = self.people[g.id]
-        if rec ~= nil then
-            local p = lerpCell(g.prev, g.cell, guestAlpha)
-            r:save()
-            r:transform(Mat2D.withTranslation(p.x - PERSON_SIZE / 2, p.y - PERSON_SIZE / 2 - 6))
-            rec.instance:draw(r)
-            r:restore()
+    if Config.GUEST_FX_ENABLED then
+        -- The floor decals lie on the floor; the guests stand over them.
+        GuestFx.drawDecals(self.fx, r)
+        GuestFx.drawGuests(self.fx, r)
+    else
+        local guestAlpha = guestAlphaOf(sim)
+        for _, g in sim.guests do
+            local rec = self.people[g.id]
+            if rec ~= nil then
+                local p = lerpCell(g.prev, g.cell, guestAlpha)
+                r:save()
+                r:transform(Mat2D.withTranslation(p.x - PERSON_SIZE / 2, p.y - PERSON_SIZE / 2 - 6))
+                rec.instance:draw(r)
+                r:restore()
+            end
         end
     end
 
@@ -1266,6 +1292,7 @@ return function(context: Context): Layout<Game>
         snakeHead = late(),
         sim = sim,
         people = {},
+        fx = GuestFx.new(TILE, { dx = SHADOW_DX, dy = SHADOW_DY, alpha = SHADOW_ALPHA, feather = SHADOW_FEATHER }),
         head = nil,
         headState = 'idle',
         floorImage = nil,

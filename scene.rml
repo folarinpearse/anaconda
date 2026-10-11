@@ -356,7 +356,15 @@
     <ImageAsset file="snake_skin.png" height="272" width="1280" assetId="7033086" name="snake_skin" id="0:912"/>
     <ImageAsset file="snake_light.png" height="192" width="192" assetId="7033087" name="snake_light" id="0:913"/>
     <ImageAsset file="flicker_mask.png" height="192" width="768" assetId="7033088" name="flicker_mask" id="0:914"/>
-    <ScriptAsset file="main.luau" dependencyIds="0:83-0:84-0:81-0:85-0:88-0:89-0:91" compilationOrder="9" serializedImplementedMethods="70409" scriptProtocolValue="2" name="main" id="0:80"/>
+    <ImageAsset file="guest_cup_tipped.png" height="56" width="72" name="guest_cup_tipped" id="0:920"/>
+    <ImageAsset file="guest_spill.png" height="112" width="144" name="guest_spill" id="0:921"/>
+    <ImageAsset file="guest_witch_item.png" height="192" width="192" name="guest_witch_item" id="0:922"/>
+    <ImageAsset file="guest_pumpkin_item.png" height="192" width="192" name="guest_pumpkin_item" id="0:923"/>
+    <ImageAsset file="guest_devil_item.png" height="192" width="192" name="guest_devil_item" id="0:924"/>
+    <ImageAsset file="guest_skeleton_item.png" height="192" width="192" name="guest_skeleton_item" id="0:925"/>
+    <ImageAsset file="guest_cat_item.png" height="192" width="192" name="guest_cat_item" id="0:926"/>
+    <ImageAsset file="guest_vampire_item.png" height="192" width="192" name="guest_vampire_item" id="0:927"/>
+    <ScriptAsset file="main.luau" dependencyIds="0:83-0:84-0:81-0:85-0:88-0:89-0:91-0:92" compilationOrder="10" serializedImplementedMethods="70409" scriptProtocolValue="2" name="main" id="0:80"/>
     <ScriptAsset file="sim.luau" isModule="true" dependencyIds="0:84" compilationOrder="4" name="sim" id="0:81"/>
     <ScriptAsset file="level.luau" isModule="true" name="level" id="0:83"/>
     <ScriptAsset file="config.luau" isModule="true" compilationOrder="2" name="config" id="0:84"/>
@@ -366,6 +374,7 @@
     <ScriptAsset file="lighting.luau" isModule="true" dependencyIds="0:86-0:87" compilationOrder="7" name="lighting" id="0:88"/>
     <ScriptAsset file="flicker.luau" isModule="true" dependencyIds="0:84-0:85" compilationOrder="6" name="flicker" id="0:89"/>
     <ScriptAsset file="bodypath.luau" isModule="true" compilationOrder="8" name="bodypath" id="0:91"/>
+    <ScriptAsset file="guestfx.luau" isModule="true" dependencyIds="0:81-0:84-0:88" compilationOrder="9" name="guestfx" id="0:92"/>
     <ViewModel defaultInstanceId="0:106" name="Game" id="0:100">
         <ViewModelPropertyNumber name="score" id="0:101"/>
         <ViewModelPropertyNumber name="length" id="0:102"/>

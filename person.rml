@@ -3,19 +3,22 @@
         <LayoutComponentStyle name="Person Style" id="0:205"/>
         <Node x="16" y="29" scaleX="0.9" scaleY="0.9" name="Size" id="5:10">
             <Node name="Rig" id="0:210">
-                <Node x="12" y="-21" name="Bang" id="0:211">
-                    <Shape y="-4" name="Bang Bar" id="0:212">
-                        <Rectangle cornerRadiusTL="1" cornerRadiusTR="1" cornerRadiusBL="1" cornerRadiusBR="1" width="4" height="9" name="Path" id="0:316"/>
-                        <Fill name="Fill" id="0:317">
-                            <SolidColor colorValue="FFFFD54F" name="Color" id="0:318"/>
-                        </Fill>
-                    </Shape>
-                    <Shape y="3.5" name="Bang Dot" id="0:213">
-                        <Rectangle cornerRadiusTL="1" cornerRadiusTR="1" cornerRadiusBL="1" cornerRadiusBR="1" width="4" height="4" name="Path" id="0:319"/>
-                        <Fill name="Fill" id="0:320">
-                            <SolidColor colorValue="FFFFD54F" name="Color" id="0:321"/>
-                        </Fill>
-                    </Shape>
+                <Node name="Bang Pivot" id="5:1001">
+                    <DataBindContext sourcePathIds="0:300-5:1002" propertyKey="15" id="5:1004"/>
+                    <Node x="12" y="-21" name="Bang" id="0:211">
+                        <Shape y="-4" name="Bang Bar" id="0:212">
+                            <Rectangle cornerRadiusTL="1" cornerRadiusTR="1" cornerRadiusBL="1" cornerRadiusBR="1" width="4" height="9" name="Path" id="0:316"/>
+                            <Fill name="Fill" id="0:317">
+                                <SolidColor colorValue="FFFFD54F" name="Color" id="0:318"/>
+                            </Fill>
+                        </Shape>
+                        <Shape y="3.5" name="Bang Dot" id="0:213">
+                            <Rectangle cornerRadiusTL="1" cornerRadiusTR="1" cornerRadiusBL="1" cornerRadiusBR="1" width="4" height="4" name="Path" id="0:319"/>
+                            <Fill name="Fill" id="0:320">
+                                <SolidColor colorValue="FFFFD54F" name="Color" id="0:321"/>
+                            </Fill>
+                        </Shape>
+                    </Node>
                 </Node>
                 <Node x="0.6" name="Head Turn" id="5:11">
                     <DataBindContext sourcePathIds="0:300-5:2" propertyKey="15" id="5:40"/>
@@ -1527,12 +1530,14 @@
         <ViewModelPropertyNumber name="lookAngle" id="5:2"/>
         <ViewModelPropertyBoolean name="dancing" id="5:3"/>
         <ViewModelPropertyBoolean name="hasDrink" id="5:4"/>
+        <ViewModelPropertyNumber name="upright" id="5:1002"/>
         <ViewModelInstance exports="true" name="Default" id="0:302">
             <ViewModelInstanceEnum propertyValue="0:311" viewModelPropertyId="0:301" id="0:527"/>
             <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="5:1" id="5:997"/>
             <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="5:2" id="5:998"/>
             <ViewModelInstanceBoolean propertyValue="false" viewModelPropertyId="5:3" id="5:999"/>
             <ViewModelInstanceBoolean propertyValue="true" viewModelPropertyId="5:4" id="5:1000"/>
+            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="5:1002" id="5:1003"/>
         </ViewModelInstance>
     </ViewModel>
 </Rive>
